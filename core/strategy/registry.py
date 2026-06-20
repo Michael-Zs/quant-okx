@@ -29,13 +29,13 @@ class StrategyRegistry:
 
     @classmethod
     def _register_module(cls, mod):
-        from core.strategy.multi_base import MultiStrategy
+        # 统一标记：Strategy/MultiStrategy 基类均声明 strategy_kind（"single"/"multi"），
+        # 子类继承之。据此判断「是策略模板类」，无需 import MultiStrategy 做 isinstance 双判。
         for attr in vars(mod).values():
             if not isinstance(attr, type):
                 continue
-            is_single = issubclass(attr, Strategy) and attr is not Strategy
-            is_multi = issubclass(attr, MultiStrategy) and attr is not MultiStrategy
-            if (is_single or is_multi) and getattr(attr, "name", ""):
+            if getattr(attr, "strategy_kind", None) in ("single", "multi") \
+                    and getattr(attr, "name", ""):
                 cls.register(attr)
 
     # ---- 查询 ----
@@ -54,7 +54,8 @@ class StrategyRegistry:
                 "name": s.name,
                 "display_name": s.display_name or s.name,
                 "description": s.description,
-                "kind": getattr(s, "kind", "single"),
+                "strategy_kind": getattr(s, "strategy_kind", "single"),
+                "kind": getattr(s, "strategy_kind", getattr(s, "kind", "single")),
                 "side_mode": getattr(s, "side_mode", "long_short"),
                 "params": [
                     {"name": p.name, "default": p.default, "label": p.label,

@@ -11,11 +11,15 @@ from fastapi import FastAPI
 from core.utils.config import settings
 from api.routes_monitor import router as monitor_router
 from api.routes_control import router as control_router
+from api.routes_crud import router as crud_router
+from api.routes_ws import router as ws_router
 
 app = FastAPI(title="OKX 量化交易控制台 API", version="1.0")
 
 app.include_router(monitor_router)
 app.include_router(control_router)
+app.include_router(crud_router)
+app.include_router(ws_router)
 
 
 @app.get("/")

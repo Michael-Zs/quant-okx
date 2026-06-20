@@ -53,6 +53,7 @@ class Strategy(metaclass=_StrategyMeta):
     description: str = ""
     side_mode: str = "long_short"   # long_only | long_short
     version: str = "1.0"
+    strategy_kind: str = "single"   # single | multi：统一节点抽象据此分派，无需 isinstance 判
 
     def __init__(self, **kwargs):
         self.p: dict[str, Any] = {}

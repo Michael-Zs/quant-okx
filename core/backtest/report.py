@@ -14,6 +14,23 @@ class BacktestReport:
     symbol: str = ""
     bar: str = ""
 
+
+@dataclass
+class BacktestOutcome:
+    """统一回测结果（run_node 产出）：对前端 / API 序列化友好的标准结构。
+
+    无论底层是单 symbol、多 symbol 资金槽、还是资金层组合，都归一为这同一结构，
+    前端不必关心 report_kind 差异（per_leg 提供各子明细供组合页展开）。
+    """
+    equity_curve: pd.DataFrame    # ts, equity
+    metrics: dict
+    trades: pd.DataFrame
+    report_kind: str = ""         # single | multi | group
+    per_leg: list = field(default_factory=list)   # [(name, weight, BacktestReport), ...]
+    config: dict = field(default_factory=dict)
+    symbol: str = ""
+    bar: str = ""
+
     @property
     def total_return(self) -> float:
         return self.metrics.get("total_return", 0.0)

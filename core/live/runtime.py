@@ -158,3 +158,27 @@ def delete_job(job_id: str) -> bool:
         except FileNotFoundError:
             pass
     return True
+
+
+# ---- 策略组部署（多组占比；daemon 读 DB，用 --deployment <id>）----
+
+def start_deployment(deployment_id: str) -> str:
+    """启动部署 daemon。用 deployment_id 作为 job/state/log 的 key。"""
+    job_id = deployment_id
+    config = {"deployment_id": deployment_id, "job_id": job_id,
+              "status": "running", "created_at": time.strftime("%Y-%m-%d %H:%M:%S")}
+    write_json_atomic(job_path(job_id), config)
+    daemon = settings.ROOT / "scripts" / "trader_daemon.py"
+    proc = subprocess.Popen(
+        [sys.executable, str(daemon), "--deployment", deployment_id],
+        stdout=open(out_path(job_id), "a", encoding="utf-8"),
+        stderr=subprocess.STDOUT,
+        start_new_session=True, cwd=str(settings.ROOT))
+    config["pid"] = proc.pid
+    write_json_atomic(job_path(job_id), config)
+    return job_id
+
+
+def stop_deployment(deployment_id: str) -> bool:
+    """停止部署 daemon（按 deployment_id 作 key，复用 stop_job）。"""
+    return stop_job(deployment_id)

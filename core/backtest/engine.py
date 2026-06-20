@@ -1,12 +1,14 @@
 """回测引擎：逐 K 线 mark-to-market，支持手续费/滑点/仅多/多空。
 
-相对原项目 /home/zsm/Prj/quant/backtest/engine.py 的改进：
-- 每根 K 线都按 close 估算未实现盈亏并记录权益，得到连续权益曲线（原版只在平仓点记）。
-- 增加手续费（按名义价值）和滑点；仓位/杠杆/多空逻辑与原版一致（复利）。
-
 仓位模型：每次用 cash * position_ratio * leverage 作为名义价值开仓；
 盈亏 = (price - entry) * dir * size，其中 size = notional / entry，
-等价于原版 (price-entry)/entry * dir * capital * leverage * position_ratio。
+等价于 (price-entry)/entry * dir * capital * leverage * position_ratio。
+
+统一节点抽象后的增强：
+- ``BacktestConfig.scale_capital(weight)`` 收口资金切分（消除原 portfolio/multi 逐字段复制）。
+- ``run`` 的 invert 改用统一的 ``invert_df``（与 trader/daemon/node 同源）。
+- ``run_node(node, ctx, cfg)`` 统一回测入口：按 node_type 分派到 run / run_multi / run_group，
+  归一为 ``BacktestOutcome`` 供前端 / API 消费。
 """
 from __future__ import annotations
 from dataclasses import dataclass, asdict
@@ -14,7 +16,8 @@ import numpy as np
 import pandas as pd
 
 from core.backtest import metrics as M
-from core.backtest.report import BacktestReport
+from core.backtest.report import BacktestReport, BacktestOutcome
+from core.strategy.invert import invert_df
 
 
 @dataclass
@@ -26,6 +29,19 @@ class BacktestConfig:
     slippage: float = 0.0005       # 滑点比例
     side_mode: str = "long_short"  # long_only | long_short
     bars_per_year: int = 8760      # 由周期推断，年化用
+
+    def scale_capital(self, weight: float) -> "BacktestConfig":
+        """返回 initial_capital 按 weight 缩放的新配置，其余字段不变。
+
+        统一了原 strategy/portfolio.py、backtest/multi.py 各自逐字段复制 BacktestConfig
+        的重复，且新增 BacktestConfig 字段时不会因遗漏而静默用默认值。
+        """
+        return BacktestConfig(
+            initial_capital=self.initial_capital * weight,
+            leverage=self.leverage, position_ratio=self.position_ratio,
+            fee_rate=self.fee_rate, slippage=self.slippage,
+            side_mode=self.side_mode, bars_per_year=self.bars_per_year,
+        )
 
 
 def _build_metrics(equity: pd.Series, trades: pd.DataFrame, bpy: int, init: float) -> dict:
@@ -52,8 +68,7 @@ def run(df: pd.DataFrame, cfg: BacktestConfig | None = None,
     if "signal" not in df.columns:
         raise ValueError("回测需要 df 含 'signal' 列")
     if invert:
-        df = df.copy()
-        df["signal"] = (-df["signal"].fillna(0)).astype(int)
+        df = invert_df(df)
     if df.empty:
         empty = pd.DataFrame(columns=["ts", "equity"])
         return BacktestReport(empty, pd.DataFrame(), {}, asdict(cfg), strategy_name, symbol, bar)
@@ -113,3 +128,55 @@ def run(df: pd.DataFrame, cfg: BacktestConfig | None = None,
     metrics = _build_metrics(equity, trades_df, cfg.bars_per_year, cfg.initial_capital)
     return BacktestReport(equity_curve, trades_df, metrics, asdict(cfg),
                           strategy_name, symbol, bar)
+
+
+def run_node(node, ctx, cfg: BacktestConfig | None = None,
+             symbol: str = "", bar: str = "") -> BacktestOutcome:
+    """统一回测入口：对任意 StrategyNode 回测，返回标准化的 BacktestOutcome。
+
+    按 node_type 分派：
+    - allocation_group → run_group（各子按 weight 切分资金，资金层组合）；
+    - leaf / signal_combiner → generate_signals 后按 symbol 数走：
+      单 symbol → run；多 symbol → run_multi（资金槽模型）。
+    run_multi / run_group 延迟 import 以避免 engine ↔ multi/portfolio 循环。
+    """
+    cfg = cfg or BacktestConfig()
+    nt = getattr(node, "node_type", "leaf")
+    name = getattr(node, "name", "")
+
+    if nt == "allocation_group":
+        from core.backtest.portfolio import run_group
+        rep = run_group(node, ctx, cfg)
+        return BacktestOutcome(
+            equity_curve=rep.equity_curve, metrics=rep.metrics,
+            trades=_concat_trades([(n, r) for n, _w, r in rep.per_strategy]),
+            report_kind="group", per_leg=list(rep.per_strategy),
+            config=asdict(cfg), symbol=symbol, bar=bar,
+        )
+
+    signals = node.generate_signals(ctx)
+    symbols = list(signals.keys())
+
+    if len(symbols) == 1:
+        sym = symbols[0]
+        rep = run(signals[sym], cfg, strategy_name=name, symbol=sym, bar=bar)
+        return BacktestOutcome(
+            equity_curve=rep.equity_curve, metrics=rep.metrics, trades=rep.trades,
+            report_kind="single", per_leg=[(name, 1.0, rep)],
+            config=asdict(cfg), symbol=sym, bar=bar,
+        )
+
+    from core.backtest.multi import run_multi
+    rep = run_multi(signals, cfg)
+    return BacktestOutcome(
+        equity_curve=rep.equity_curve, metrics=rep.metrics,
+        trades=_concat_trades([(s, r) for s, _w, r in rep.per_symbol]),
+        report_kind="multi", per_leg=list(rep.per_symbol),
+        config=asdict(cfg), symbol=symbol, bar=bar,
+    )
+
+
+def _concat_trades(named_reports) -> pd.DataFrame:
+    """把多个 BacktestReport 的 trades 合并，附 leg 列标识来源。"""
+    parts = [r.trades.assign(leg=n) for n, r in named_reports if not r.trades.empty]
+    return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()

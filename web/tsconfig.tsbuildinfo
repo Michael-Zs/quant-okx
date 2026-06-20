@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/api/client.ts","./src/api/types.ts","./src/components/SymbolPicker.tsx","./src/components/charts.tsx","./src/components/ui.tsx","./src/lib/utils.ts","./src/pages/Compose.tsx","./src/pages/Deploy.tsx","./src/pages/Explore.tsx","./src/store/useStore.ts"],"version":"5.9.3"}

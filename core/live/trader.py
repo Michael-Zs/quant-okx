@@ -7,6 +7,7 @@ from __future__ import annotations
 from core.data.fetcher import fetch_recent
 from core.data.symbols import okx_to_ccxt
 from core.live.exchange import get_position, set_leverage, get_balance, market_order
+from core.strategy.invert import invert_df
 
 
 def run_once(ex, strategy, symbol: str, bar: str, leverage: int, position_ratio: float,
@@ -15,8 +16,7 @@ def run_once(ex, strategy, symbol: str, bar: str, leverage: int, position_ratio:
     df = fetch_recent(symbol, bar, limit=300)
     sig_df = strategy.generate_signals(df)
     if invert:
-        sig_df = sig_df.copy()
-        sig_df["signal"] = (-sig_df["signal"].fillna(0)).astype(int)
+        sig_df = invert_df(sig_df)
     signal = int(sig_df["signal"].fillna(0).iloc[-1])
     price = float(sig_df["close"].iloc[-1])
 

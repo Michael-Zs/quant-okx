@@ -36,11 +36,14 @@ class Settings:
     STATE_DIR: Path = ROOT / "runtime" / "state"
     LOGS_DIR: Path = ROOT / "runtime" / "logs"
     STRATEGIES_DIR: Path = ROOT / "strategies"
+    DB_PATH: Path = ROOT / "runtime" / "console.db"
+    BACKTESTS_DIR: Path = ROOT / "runtime" / "backtests"
 
     @classmethod
     def ensure_dirs(cls):
         """确保运行时所需目录存在。"""
-        for d in (cls.CACHE_DIR, cls.JOBS_DIR, cls.STATE_DIR, cls.LOGS_DIR, cls.STRATEGIES_DIR):
+        for d in (cls.CACHE_DIR, cls.JOBS_DIR, cls.STATE_DIR, cls.LOGS_DIR,
+                  cls.STRATEGIES_DIR, cls.BACKTESTS_DIR):
             d.mkdir(parents=True, exist_ok=True)
 
 

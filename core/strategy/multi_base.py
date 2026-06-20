@@ -14,7 +14,8 @@ class MultiStrategy(metaclass=_StrategyMeta):
     name: str = ""
     display_name: str = ""
     description: str = ""
-    kind: str = "multi"
+    kind: str = "multi"                 # 兼容旧字段（page_multi 等历史引用）
+    strategy_kind: str = "multi"        # 与 Strategy.strategy_kind 对齐的统一标记
     universe: list[str] = []   # 空 = 用户在 UI 选中的全部币种
 
     def __init__(self, **kwargs):

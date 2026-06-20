@@ -45,6 +45,26 @@ def get_position(ex, ccxt_symbol: str) -> dict:
     return {"dir": 0, "contracts": 0.0, "entry_price": 0.0, "unrealized_pnl": 0.0}
 
 
+def get_positions(ex, ccxt_symbols: list[str]) -> dict[str, dict]:
+    """返回多 symbol 持仓 {ccxt_symbol: {dir, contracts, entry_price, unrealized_pnl}}。
+
+    一次 fetch_positions 批量查询；无持仓的 symbol 返回零仓位占位。
+    """
+    out = {s: {"dir": 0, "contracts": 0.0, "entry_price": 0.0, "unrealized_pnl": 0.0}
+           for s in ccxt_symbols}
+    if not ccxt_symbols:
+        return out
+    for p in ex.fetch_positions(ccxt_symbols):
+        sym = p.get("symbol")
+        contracts = p.get("contracts") or 0
+        if sym in out and contracts and contracts > 0:
+            side = p.get("side")
+            out[sym] = {"dir": 1 if side == "long" else -1, "contracts": float(contracts),
+                        "entry_price": float(p.get("entryPrice") or 0),
+                        "unrealized_pnl": float(p.get("unrealizedPnl") or 0)}
+    return out
+
+
 def set_leverage(ex, ccxt_symbol: str, leverage: int):
     try:
         ex.set_leverage(int(leverage), ccxt_symbol)

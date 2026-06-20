@@ -1,72 +1,65 @@
-"""资金分配组合器（Portfolio）：每个策略独立运行、独立持仓，按资金比例合成组合权益。
+"""兼容层（过渡）：旧 Portfolio 资金组合接口。
 
-与 Ensemble 的区别：Ensemble 在信号层合成；Portfolio 在资金/权益层合成。
+新的资金层组合抽象：
+- 组合器 core/strategy/node.py::AllocationGroup（只 collect 子信号 + weight/invert，不碰回测）
+- 回测消费者 core/backtest/portfolio.py::run_group
+
+本文件保留旧 ``Allocation`` / ``run_portfolio`` 签名供 app/pages/page_compose.py
+过渡使用，内部通过适配器委托 run_group（零重复逻辑），待 React 前端上线后删除。
+
+为避免 strategy 层模块级 import backtest（分层泄漏），所有 backtest 依赖改为
+函数内延迟 import。
 """
 from __future__ import annotations
 from dataclasses import dataclass
-import numpy as np
 import pandas as pd
-
-from core.backtest.engine import run, BacktestConfig
-from core.backtest import metrics as M
 
 
 @dataclass
 class Allocation:
-    strategy: object       # 有 generate_signals 的策略实例
+    strategy: object       # 有 generate_signals(df)->df 的策略实例
     weight: float          # 相对权重，会归一化
 
 
-@dataclass
-class PortfolioReport:
-    equity_curve: pd.DataFrame            # 合成组合权益 ts, equity
-    per_strategy: list                    # [(name, weight, BacktestReport), ...]
-    metrics: dict
-    initial_capital: float
+class _StrategyInstanceNode:
+    """适配器：把旧 Strategy 实例（generate_signals(df)->df）包装成 StrategyNode，
+    供 run_group 消费。仅用于兼容旧 run_portfolio，不参与序列化。"""
+
+    node_type = "leaf"
+
+    def __init__(self, strategy, primary_symbol: str):
+        self.name = getattr(strategy, "name", "?")
+        self.template_name = self.name
+        self.invert = False
+        self._strategy = strategy
+        self._sym = primary_symbol
+
+    def generate_signals(self, ctx):
+        from core.strategy.invert import invert_signals
+        raw = {self._sym: self._strategy.generate_signals(ctx.data[self._sym])}
+        return invert_signals(raw, self.invert)
+
+    def universe(self):
+        return []
+
+    def to_spec(self):
+        return {"node_type": "leaf", "name": self.name, "adapter": True}
 
 
-def run_portfolio(allocations: list[Allocation], df: pd.DataFrame,
-                  cfg: BacktestConfig, invert: bool = False) -> PortfolioReport:
-    total_w = sum(a.weight for a in allocations)
-    if total_w <= 0:
-        raise ValueError("权重总和必须 > 0")
+def run_portfolio(allocations: list, df: pd.DataFrame, cfg, invert: bool = False):
+    """旧签名：Allocation(strategy, weight) 列表 + 单 df → 组合权益报告。
 
-    per: list = []
-    equity_parts: list = []
-    all_trades: list = []
+    通过适配器把每个 Allocation 包成 ChildRef（旧 invert 映射到每个子的 childref.invert，
+    等价「所有子反向」），委托 run_group，零重复逻辑。
+    """
+    from core.strategy.node import AllocationGroup, ChildRef, NodeContext
+    from core.backtest.portfolio import run_group
 
-    for a in allocations:
-        w = a.weight / total_w
-        sub_cfg = BacktestConfig(
-            initial_capital=cfg.initial_capital * w, leverage=cfg.leverage,
-            position_ratio=cfg.position_ratio, fee_rate=cfg.fee_rate,
-            slippage=cfg.slippage, side_mode=cfg.side_mode,
-            bars_per_year=cfg.bars_per_year)
-        sig_df = a.strategy.generate_signals(df)
-        rep = run(sig_df, sub_cfg, strategy_name=getattr(a.strategy, "name", "?"),
-                  invert=invert)
-        per.append((getattr(a.strategy, "name", "?"), w, rep))
-        equity_parts.append(rep.equity_curve["equity"].values)
-        if not rep.trades.empty:
-            all_trades.append(rep.trades)
-
-    combined = np.sum(np.vstack(equity_parts), axis=0)
-    combined_s = pd.Series(combined)
-    combined_ec = pd.DataFrame({"ts": df["ts"].values, "equity": combined})
-    trades_df = (pd.concat(all_trades, ignore_index=True) if all_trades
-                 else pd.DataFrame())
-
-    metrics = {
-        "total_return": M.total_return(combined_s),
-        "annual_return": M.annual_return(combined_s, cfg.bars_per_year),
-        "max_drawdown": M.max_drawdown(combined_s),
-        "sharpe": M.sharpe(combined_s, cfg.bars_per_year),
-        "sortino": M.sortino(combined_s, cfg.bars_per_year),
-        "calmar": M.calmar(combined_s, cfg.bars_per_year),
-        "volatility": M.volatility(combined_s, cfg.bars_per_year),
-        "win_rate": M.win_rate(trades_df),
-        "profit_factor": M.profit_factor(trades_df),
-        "n_trades": M.n_trades(trades_df),
-        "final_capital": float(combined[-1]) if len(combined) else cfg.initial_capital,
-    }
-    return PortfolioReport(combined_ec, per, metrics, cfg.initial_capital)
+    sym = "_portfolio_asset"
+    children = [
+        ChildRef(node=_StrategyInstanceNode(a.strategy, sym), weight=a.weight, invert=invert)
+        for a in allocations
+    ]
+    group = AllocationGroup(name="portfolio", children=children)
+    ctx = NodeContext(data={sym: df}, primary_symbol=sym)
+    return run_group(group, ctx, cfg)
