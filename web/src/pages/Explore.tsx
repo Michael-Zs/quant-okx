@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Save } from 'lucide-react'
+import { Save, Bot } from 'lucide-react'
 import { api, openBacktestWS } from '../api/client'
 import type { TemplateInfo, BacktestMetrics, NodeSpec, ParamSchema } from '../api/types'
 import { Card, CardHeader, Button, Slider, Select, Input, Field } from '../components/ui'
 import { EquityChart, MetricsGrid } from '../components/charts'
 import { SymbolPicker, MultiSymbolPicker } from '../components/SymbolPicker'
+import { SpecModal } from '../components/SpecModal'
 import { useStore } from '../store/useStore'
 
 const BARS = ['1H', '4H', '1D']
@@ -27,6 +28,7 @@ export default function Explore() {
   const [equity, setEquity] = useState<{ ts: string[]; equity: number[] } | null>(null)
   const [saveName, setSaveName] = useState('')
   const [msg, setMsg] = useState('')
+  const [specOpen, setSpecOpen] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
   const { refreshStrategies } = useStore()
 
@@ -93,7 +95,7 @@ export default function Explore() {
     <div className="flex h-full">
       {/* 左：模板库 */}
       <div className="w-72 shrink-0 border-r border-line p-4 overflow-auto">
-        <div className="flex gap-1 mb-4 p-1 bg-black/20 rounded-sm">
+        <div className="flex gap-1 mb-2 p-1 bg-black/20 rounded-sm">
           {(['single', 'multi'] as const).map((k) => (
             <button key={k} onClick={() => setFilter(k)}
               className={`flex-1 py-1.5 rounded text-xs font-medium transition-colors ${filter === k ? 'bg-card-strong text-accent' : 'text-dim'}`}>
@@ -101,6 +103,10 @@ export default function Explore() {
             </button>
           ))}
         </div>
+        <button onClick={() => setSpecOpen(true)}
+          className="w-full mb-3 flex items-center justify-center gap-1.5 py-1.5 rounded text-xs font-medium border border-accent/30 text-accent hover:bg-accent/10 transition-colors">
+          <Bot size={14} /> AI 策略开发规范（{filter === 'single' ? '单币' : '多币'}）
+        </button>
         <div className="space-y-1">
           {visible.map((t) => (
             <button key={t.name} onClick={() => setSel(t.name)}
@@ -170,6 +176,8 @@ export default function Explore() {
         </Card>
         <div className="mt-4"><MetricsGrid m={metrics} /></div>
       </div>
+
+      {specOpen && <SpecModal kind={filter} onClose={() => setSpecOpen(false)} />}
     </div>
   )
 }

@@ -1,7 +1,7 @@
 """统一的信号反向逻辑。
 
 历史上 invert（反转信号方向 1↔-1）在 trader.run_once、trader_daemon、
-backtest/engine.run、strategy/portfolio.run_portfolio 四处各写一遍。本模块收口为一处。
+backtest/engine.run 三处各写一遍。本模块收口为一处。
 
 链路级反向（多层 invert 叠加）语义 = XOR（奇数层反向则反向）：
     final_dir = signal * (-1) ** n_invert_layers

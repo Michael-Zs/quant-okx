@@ -1,6 +1,6 @@
 import type { Config } from 'tailwindcss'
 
-// 复用原 Streamlit styles.py 的深色金融配色作为 design token
+// 深色金融配色 design token
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {

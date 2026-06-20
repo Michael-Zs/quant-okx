@@ -29,6 +29,66 @@ def templates():
     return {"templates": StrategyRegistry.info(), "count": len(StrategyRegistry.names())}
 
 
+@router.get("/strategy_spec")
+def strategy_spec(kind: str = "single"):
+    """AI 策略开发规范文本（单币/多币），供前端「复制给 AI 写策略」用。
+
+    kind=single → STRATEGY_SPEC；kind=multi → MULTI_STRATEGY_SPEC。
+    """
+    from core.strategy.spec import STRATEGY_SPEC, MULTI_STRATEGY_SPEC
+    k = (kind or "").strip().lower()
+    if k == "multi":
+        return {"kind": "multi", "spec": MULTI_STRATEGY_SPEC, "filename": "multi_strategy_spec.md"}
+    return {"kind": "single", "spec": STRATEGY_SPEC, "filename": "strategy_spec.md"}
+
+
+@router.get("/user_strategies")
+def user_strategies():
+    """列出 strategies/ 下用户 .py 文件（策略实验室保存的代码）。"""
+    from core.utils.config import settings
+    import re
+    out = []
+    if settings.STRATEGIES_DIR.exists():
+        for py in sorted(settings.STRATEGIES_DIR.glob("*.py")):
+            if py.name.startswith("_") or py.stem.endswith("example"):
+                continue
+            try:
+                code = py.read_text(encoding="utf-8")
+            except Exception as e:
+                code = f"# 读取失败: {e}"
+            out.append({"name": py.stem, "filename": py.name, "code": code,
+                        "mtime": int(py.stat().st_mtime)})
+    return {"files": out, "count": len(out)}
+
+
+@router.get("/config")
+def get_config():
+    """设置页用：脱敏返回当前配置（OKX 是否配置、API 地址、默认参数、缓存信息）。"""
+    from core.utils.config import settings
+    from core.data.cache import _path as _cache_path
+    cache_files = list(settings.CACHE_DIR.glob("*.parquet")) if settings.CACHE_DIR.exists() else []
+    cache_size = sum(f.stat().st_size for f in cache_files)
+    return {
+        "okx_configured": bool(settings.OKX_API_KEY and settings.OKX_API_SECRET
+                                and settings.OKX_API_PASSPHRASE),
+        "api_host": settings.API_HOST,
+        "api_port": settings.API_PORT,
+        "api_token_set": settings.API_TOKEN != "change_me",
+        "defaults": {
+            "leverage": settings.DEFAULT_LEVERAGE,
+            "position_ratio": settings.DEFAULT_POSITION_RATIO,
+            "fee": settings.DEFAULT_FEE,
+            "slippage": settings.DEFAULT_SLIPPAGE,
+        },
+        "cache": {
+            "dir": str(settings.CACHE_DIR),
+            "count": len(cache_files),
+            "size_bytes": cache_size,
+        },
+        "strategies_dir": str(settings.STRATEGIES_DIR),
+    }
+
+
 @router.get("/instruments")
 def instruments():
     """可用 USDT 永续合约列表（带 1 天缓存，供前端搜索选择）。拉取失败回退常用列表。"""

@@ -143,21 +143,6 @@ def test_run_node_allocation_group():
     assert len(out.equity_curve) == 200
 
 
-def test_old_run_portfolio_compat():
-    """旧 run_portfolio 兼容层委托 run_group，结果与直接 AllocationGroup 等价。"""
-    from core.strategy.portfolio import Allocation, run_portfolio
-    from core.strategy.registry import StrategyRegistry
-    from core.backtest.engine import BacktestConfig
-    ctx = _ctx()
-    ma_cls, rsi_cls = StrategyRegistry.get("ma_cross"), StrategyRegistry.get("rsi")
-    allocs = [Allocation(ma_cls(fast=5, slow=20), 0.6),
-              Allocation(rsi_cls(period=14), 0.4)]
-    rep = run_portfolio(allocs, ctx.data["BTC-USDT-SWAP"], BacktestConfig(initial_capital=10000))
-    assert "total_return" in rep.metrics
-    assert len(rep.per_strategy) == 2
-    assert len(rep.equity_curve) == 200
-
-
 def test_regression_combiner_matches_old_ensemble():
     """回归：新 SignalCombiner 与旧 Ensemble 在相同子策略/模式下，合成 signal 应逐点一致。
 

@@ -1,4 +1,4 @@
-import type { TemplateInfo, StrategyInstance, StrategyGroup, Deployment, NodeSpec, BacktestMetrics } from './types'
+import type { TemplateInfo, StrategyInstance, StrategyGroup, Deployment, NodeSpec, BacktestMetrics, UserStrategy, GridSearchResult, MultiReport, ConfigInfo } from './types'
 
 // API token：每次请求动态读 localStorage（用户在侧边栏设置入口填），回退默认
 function getToken(): string {
@@ -23,6 +23,9 @@ async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
 export const api = {
   // 模板
   templates: () => req<{ templates: TemplateInfo[]; count: number }>('/templates'),
+  // AI 策略开发规范（单币/多币），供「复制给 AI」用
+  strategySpec: (kind: 'single' | 'multi') =>
+    req<{ kind: string; spec: string; filename: string }>(`/strategy_spec?kind=${kind}`),
   // 可用合约列表（搜索选择用）
   instruments: () => req<{ instruments: string[]; fallback?: boolean }>('/instruments'),
 
@@ -54,6 +57,22 @@ export const api = {
   backtest: (data: Record<string, unknown>) =>
     req<{ backtest_id: string; metrics: BacktestMetrics; report_kind: string; n_trades: number; equity_start: number; equity_end: number }>(
       '/backtest', { method: 'POST', body: JSON.stringify(data) }),
+
+  // ---- 策略实验室 ----
+  userStrategies: () => req<{ files: UserStrategy[]; count: number }>('/user_strategies'),
+  saveUserStrategy: (data: { name: string; code: string }) =>
+    req<{ ok: boolean; name: string; registered: boolean; names: string[] }>('/user_strategies', { method: 'POST', body: JSON.stringify(data) }),
+  deleteUserStrategy: (name: string) => req<{ ok: boolean; deleted: string }>(`/user_strategies/${name}`, { method: 'DELETE' }),
+  gridSearch: (data: { template_name: string; param_ranges: Record<string, [number, number, number]>; symbol: string; bar: string; days: number; metric: string; n_jobs?: number }) =>
+    req<{ results: GridSearchResult[]; keys: string[]; metric: string; count: number }>('/grid_search', { method: 'POST', body: JSON.stringify(data) }),
+  multiBacktest: (data: { node_spec: NodeSpec; symbols: string[]; bar: string; days: number; allocation?: Record<string, number>; invert?: boolean; initial_capital?: number; leverage?: number; position_ratio?: number }) =>
+    req<MultiReport>('/multi_backtest', { method: 'POST', body: JSON.stringify(data) }),
+
+  // ---- 设置 ----
+  config: () => req<ConfigInfo>('/config'),
+  updateEnv: (data: { OKX_API_KEY?: string; OKX_API_SECRET?: string; OKX_API_PASSPHRASE?: string }) =>
+    req<{ ok: boolean; updated: string[]; note: string }>('/config/env', { method: 'POST', body: JSON.stringify(data) }),
+  clearCache: () => req<{ cleared: number }>('/cache/clear', { method: 'POST' }),
 }
 
 // WS 实时回测预览（组合页拖动时推送）

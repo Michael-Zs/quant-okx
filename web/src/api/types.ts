@@ -100,3 +100,48 @@ export interface BacktestMetrics {
   n_trades: number
   final_capital: number
 }
+
+// ---- 策略实验室 ----
+export interface UserStrategy {
+  name: string
+  filename: string
+  code: string
+  mtime: number
+}
+
+export interface GridSearchResult {
+  [param: string]: number | string
+  total_return: number
+  sharpe: number
+  max_drawdown: number
+  sortino: number
+  calmar: number
+  win_rate: number
+  n_trades: number
+}
+
+// ---- 多币回测明细 ----
+export interface PerSymbolReport {
+  symbol: string
+  weight: number
+  metrics: BacktestMetrics
+  equity: number[]
+}
+export interface MultiReport {
+  metrics: BacktestMetrics
+  equity: { ts: string[]; equity: number[] }
+  per_symbol: PerSymbolReport[]
+  holdings: { ts: string[]; symbols: string[]; matrix: number[][] }
+  initial_capital: number
+}
+
+// ---- 设置 ----
+export interface ConfigInfo {
+  okx_configured: boolean
+  api_host: string
+  api_port: number
+  api_token_set: boolean
+  defaults: { leverage: number; position_ratio: number; fee: number; slippage: number }
+  cache: { dir: string; count: number; size_bytes: number }
+  strategies_dir: string
+}

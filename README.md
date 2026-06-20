@@ -1,6 +1,6 @@
 # OKX 量化交易控制台
 
-一个基于 Streamlit 的加密货币量化交易控制台：自由选择/组合策略、即时回测可视化、用 Python 写策略直接看效果、一键后台部署实盘（模拟/真实盘可切），并开放 REST API 供外部脚本/agent 监控控制。
+一个加密货币量化交易控制台（FastAPI 后端 + React 前端）：自由选择/组合策略、即时回测可视化、用 Python 写策略直接看效果、一键后台部署实盘（模拟/真实盘可切），并开放 REST API 供外部脚本/agent 监控控制。
 
 核心是 **「信号生成 ⇄ 组合 ⇄ 执行」三层解耦**：策略只产出 `signal` 列（1 做多 / -1 做空 / 0 空仓），组合（Ensemble/Portfolio）与执行（回测/实盘）在下游统一消费。
 
@@ -10,7 +10,7 @@
 - **🧩 策略组合**：
   - *Ensemble*：多策略信号按 投票/多数/AND/OR/加权 合成「一个组合策略」。
   - *Portfolio*：每策略独立运行、按资金比例切分，合成组合权益。
-- **🛠️ 策略实验室**：浏览器内 `streamlit-ace` 编辑器写 Python 策略，**保存即注册即用**；参数网格搜索找最优组合。
+- **🛠️ 策略实验室**：浏览器内代码编辑器写 Python 策略，**保存即注册即用**；参数网格搜索找最优组合。
 - **🚀 实盘部署**：选模拟/真实盘 + 策略 + 杠杆，一键启动**后台 daemon**（独立进程，关闭浏览器仍运行），真实/模拟盘可切。
 - **📉 实盘监控**：实时持仓 / PnL / 余额 / 事件日志（自动刷新）。
 - **🔌 REST API**：监控（行情/策略/任务/状态）+ 控制（回测/启停实盘），仅本地 + token。
@@ -19,19 +19,22 @@
 
 ```bash
 # 1. 安装依赖
-pip install -r requirements.txt
+pip install -r requirements.txt          # 后端
+cd web && npm install && cd ..            # 前端（首次）
 
 # 2. 配置 API key（复制模板并填写）
 cp .env.example .env
 #   编辑 .env 填入 OKX_API_KEY / OKX_API_SECRET / OKX_API_PASSPHRASE
 
-# 3. 启动控制台（同时自动拉起 REST API）
-streamlit run run_console.py
-#   控制台：http://localhost:8501
+# 3. 一键启动（后端 API + 前端）
+./run_dev.sh
+#   前端：http://localhost:5173
 #   API 文档：http://127.0.0.1:8787/docs
 ```
 
 > 仓库自带 `.env` 含一组**模拟盘** key 便于开箱体验（已 gitignore）。**该 key 此前在原项目以明文进入过 git，用于真实盘前请务必到 OKX 后台重置。**
+
+> 也可以单独启动后端：`python api_server.py`；前端单独：`cd web && npm run dev`。
 
 ## 🧠 写一个策略
 
@@ -59,18 +62,20 @@ class MyStrategy(Strategy):
         return df
 ```
 
-内置策略：`ma_cross`（MA 双线交叉）、`rsi`（RSI 超买超卖）、`bollinger`（布林带）、`dual_thrust`（Dual Thrust 突破）。
+内置策略：`ma_cross`（MA 双线交叉）、`rsi`（RSI 超买超卖）、`bollinger`（布林带）、`dual_thrust`（Dual Thrust 突破）。多币内置：动量轮动 / 等权持有 / 相对强弱 / 跨币回归。
+
+> 「策略实验室」页内置 **AI 策略开发规范**（单币/多币），一键复制或下载 `.md` 喂给 AI（Claude / ChatGPT 等），让它按规范输出可直接保存使用的策略代码。
 
 ## 📁 架构
 
 ```
-app/      Streamlit UI（页面 + 图表组件）—— core 的薄壳
+web/      React + Vite + Tailwind 前端（薄壳，调 /api）
+api/      FastAPI REST 层（监控 GET 公开 / 控制 POST 需 token）
 core/     纯 Python 业务逻辑（可独立测试、被 API 调用）
-  strategy/   Strategy 基类、注册表、Ensemble、Portfolio、内置策略
+  strategy/   Strategy 基类、注册表、Ensemble、Portfolio、内置策略、多币
   data/       OKX K线拉取 + parquet 缓存 + symbol/周期转换
   backtest/   逐K线 mark-to-market 引擎 + 指标 + 网格搜索
   live/       ccxt 交易所封装 + 单轮执行 + job/state 运行时
-api/      FastAPI REST 层（监控 + 控制）
 scripts/  trader_daemon.py（独立后台进程入口）
 ```
 

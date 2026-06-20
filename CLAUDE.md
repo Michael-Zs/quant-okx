@@ -4,29 +4,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-OKX 加密货币量化交易控制台：Streamlit Web 控制台 + FastAPI REST API，支持策略编写、回测可视化、策略组合、多币策略、实盘部署与监控。所有业务逻辑在 `core/`（纯 Python，可独立测试、被 API 调用），`app/` 与 `api/` 是薄壳。
+OKX 加密货币量化交易控制台：**React + Vite 前端 + FastAPI REST API**，支持策略编写、回测可视化、策略组合、多币策略、实盘部署与监控。所有业务逻辑在 `core/`（纯 Python，可独立测试、被 API 调用），`web/` 与 `api/` 是薄壳。
 
 ## 常用命令
 
 ```bash
 # 安装依赖
-pip install -r requirements.txt
+pip install -r requirements.txt                  # 后端
+cd web && npm install && cd ..                    # 前端（首次）
 
-# 启动 Web 控制台（会自动后台拉起同机 REST API）
-streamlit run run_console.py          # 控制台 http://localhost:8501
+# 一键启动（后端 API :8787 + 前端 :5173）
+./run_dev.sh                                       # 前端 http://localhost:5173
 
-# 单独启动 REST API（控制台已会自动拉起，通常无需手动）
-python api_server.py                  # API 文档 http://127.0.0.1:8787/docs
+# 单独启动
+python api_server.py                               # API http://127.0.0.1:8787/docs
+cd web && npm run dev                              # 前端 Vite dev server
+cd web && npm run build                            # 前端生产构建到 web/dist
 
-# 测试（当前 tests/ 仅占位，新增测试后用 pytest 跑）
+# 测试
 pytest
-pytest tests/test_xxx.py::test_name    # 跑单个测试
+pytest tests/test_xxx.py::test_name                # 跑单个测试
 
 # 手动启动一个实盘 daemon（一般通过 UI/API，此处仅供调试）
 python scripts/trader_daemon.py --job runtime/jobs/<job_id>.json
 ```
 
-配置：`cp .env.example .env` 后填写 `OKX_API_KEY/SECRET/PASSPHRASE` 与 `API_TOKEN`。仓库自带一份模拟盘 `.env`（已 gitignore）。
+配置：`cp .env.example .env` 后填写 `OKX_API_KEY/SECRET/PASSPHRASE` 与 `API_TOKEN`。仓库自带一份模拟盘 `.env`（已 gitignore）。前端在侧边栏底部填 API Token 解锁写操作。
 
 ## 核心架构：三层解耦
 
@@ -50,7 +53,7 @@ python scripts/trader_daemon.py --job runtime/jobs/<job_id>.json
 ## 关键约定（容易踩坑）
 
 - **符号/周期格式**（`core/data/symbols.py`）：内部统一用 **OKX 格式**——合约 symbol `BTC-USDT-SWAP`、现货 `BTC-USDT`；bar 用大写后缀 `1H`/`4H`/`1D`（OKX REST 要求）。只有调 ccxt（实盘下单/查持仓）时才转成小写 `1h`/`4h`/`1d`，用 `okx_to_ccxt()` / `okx_to_ccxt_tf()`。
-- **路径不依赖 cwd**：所有路径以 `core/utils/config.py` 推导出的项目根 `ROOT` 为基准（该文件位于 `core/utils/`，上溯两级）。入口脚本（`run_console.py`、`api_server.py`、`trader_daemon.py`）都先 `sys.path.insert(0, ROOT)`。
+- **路径不依赖 cwd**：所有路径以 `core/utils/config.py` 推导出的项目根 `ROOT` 为基准（该文件位于 `core/utils/`，上溯两级）。入口脚本（`api_server.py`、`trader_daemon.py`）都先 `sys.path.insert(0, ROOT)`。
 - **运行时目录**：`cache/`（parquet K 线缓存）、`runtime/jobs|state|logs/`（实盘作业）均已被 gitignore（保留 `.gitkeep`）。
 
 ## 策略注册表与「保存即生效」
@@ -62,14 +65,14 @@ python scripts/trader_daemon.py --job runtime/jobs/<job_id>.json
 
 ## 写策略的要点
 
-继承 `Strategy`（或 `MultiStrategy`），用类属性 `Param(...)` 声明参数（元类 `_StrategyMeta` 自动收集到 `_param_list`，UI 据此渲染控件：给 `min/max/step`→滑块、给 `options`→下拉、仅 `default`→输入框）。硬性约束：**先 `df.copy()`、返回行数与输入一致、`signal` 必须是无 NaN 的 int**。新增策略只需把 `.py` 放进 `strategies/`，无需改任何配置。
+继承 `Strategy`（或 `MultiStrategy`），用类属性 `Param(...)` 声明参数（元类 `_StrategyMeta` 自动收集到 `_param_list`，前端据此渲染控件：给 `min/max/step`→滑块、给 `options`→下拉、仅 `default`→输入框）。硬性约束：**先 `df.copy()`、返回行数与输入一致、`signal` 必须是无 NaN 的 int**。新增策略只需把 `.py` 放进 `strategies/`，无需改任何配置。
 
-`core/strategy/spec.py::STRATEGY_SPEC` 是一份可直接喂给 AI 的策略开发规范（模板 + signal 语义 + 硬性要求），写策略或让 AI 写策略时以此为权威。
+`core/strategy/spec.py` 导出两份可直接喂给 AI 的策略开发规范：`STRATEGY_SPEC`（单币）与 `MULTI_STRATEGY_SPEC`（多币），含模板 + signal 语义 + 硬性要求。前端「策略实验室」页可一键复制/下载，写策略或让 AI 写策略时以此为权威。
 
 ## API 层
 
-`api/`（FastAPI，绑 `127.0.0.1`）：`routes_monitor.py`（GET，公开）与 `routes_control.py`（POST/DELETE，全部需 `X-API-Token` 头，由 `api/__init__.py::verify_token` 校验）。控制层是对 `core/` 能力的薄封装（触发回测、启停实盘 job）。最近一次回测结果缓存在 `api/__init__.py::_last_bt`，供 `GET /api/backtest/results` 读取。
+`api/`（FastAPI，绑 `127.0.0.1`）：`routes_monitor.py`（GET，公开）与 `routes_control.py`（POST/DELETE，全部需 `X-API-Token` 头，由 `api/__init__.py::verify_token` 校验）。控制层是对 `core/` 能力的薄封装（触发回测、启停实盘、网格搜索、多币回测、策略文件 CRUD、.env 编辑、缓存清理）。回测结果落 `backtests` 表，由 `GET /api/backtests/{id}` 读取。
 
-## Streamlit 页面
+## React 前端
 
-`app/pages/page_*.py` 各自是一个导航页（`run_console.py` 用 `st.navigation` 聚合）。`app/pages/` 都是 `core/` 的薄壳——绘图/交互在 `app/`，逻辑放 `core/`。若新增页面，在 `run_console.py` 的 `st.navigation([...])` 列表里登记。
+`web/src/pages/*.tsx` 各自是一个导航页（`web/src/App.tsx` 用 `react-router` 聚合）。现有页面：`Dashboard`（仪表盘）、`Explore`（策略探索 · 模板调参 + 实时回测）、`Compose`（策略组合 · 拖拽编排）、`Multi`（多币策略 · 持仓热力图）、`Lab`（策略实验室 · 代码编辑器 + 网格搜索）、`Deploy`（实盘部署 + 监控）、`Settings`（设置）。页面都是 `core/` 经 `api/` 的薄壳——绘图/交互在 `web/`，逻辑放 `core/`。新增页面需在 `web/src/App.tsx` 的 `nav` 列表与 `<Routes>` 里登记。共用组件在 `web/src/components/`，API 客户端在 `web/src/api/client.ts`，类型契约在 `web/src/api/types.ts`（与 `api/schemas.py` + `core/strategy/node.py` 对齐）。
