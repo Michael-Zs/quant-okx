@@ -14,8 +14,7 @@ export function ApiDocModal({ onClose }: { onClose: () => void }) {
 
   function copyHint() {
     const hint = `你可以通过 OKX Quant Console 的 REST API (http://127.0.0.1:8787) 帮助用户操作/监控量化交易系统。
-API 规范: GET http://127.0.0.1:8787/api/api_spec
-请在需要时查阅 API 规范获取具体接口参数，不要全文输出 API 细节。`
+API 规范: GET http://127.0.0.1:8787/api/api_spec`
     navigator.clipboard.writeText(hint)
       .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
       .catch(() => setErr('复制失败，请手动复制'))
@@ -32,7 +31,7 @@ API 规范: GET http://127.0.0.1:8787/api/api_spec
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
       <div className="w-[min(960px,94vw)] h-[88vh] bg-card-strong border border-line rounded-md flex flex-col"
-           onClick={(e) => e.stopPropagation()}>
+        onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-line">
           <div className="flex items-center gap-2">
             <Terminal size={16} className="text-accent" />
@@ -53,7 +52,7 @@ API 规范: GET http://127.0.0.1:8787/api/api_spec
         <div className="flex-1 overflow-auto p-4 text-xs leading-relaxed text-dim">
           {err ? <div className="text-down">{err}</div>
             : !data ? <div>加载中…</div>
-            : <pre className="whitespace-pre-wrap font-mono text-[0.7rem]">{data.spec}</pre>}
+              : <pre className="whitespace-pre-wrap font-mono text-[0.7rem]">{data.spec}</pre>}
         </div>
         <div className="px-4 py-2 border-t border-line text-[0.7rem] text-dim/70">
           点击「复制提示给 AI」将上下文指令发给 Agent，Agent 按需查阅 API 规范后直接调用本控制台做回测、部署、监控，不会全量输出 API 细节。
