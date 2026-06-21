@@ -13,8 +13,10 @@ export function SpecModal({ kind, onClose }: { kind: 'single' | 'multi'; onClose
   }, [kind])
 
   function copyHint() {
+    const token = localStorage.getItem('api_token')
+    const tokenLine = token && token !== 'change_me' ? `\nAPI Token: ${token}` : ''
     const hint = `你可以通过 OKX Quant Console 的 REST API (http://127.0.0.1:8787) 帮助用户编写${kind === 'single' ? '单币 (Strategy)' : '多币 (MultiStrategy)'
-      }策略。\n策略开发规范: GET http://127.0.0.1:8787/api/strategy_spec?kind=${kind}`
+      }策略。\n策略开发规范: GET http://127.0.0.1:8787/api/strategy_spec?kind=${kind}${tokenLine}`
     navigator.clipboard.writeText(hint)
       .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
       .catch(() => setErr('复制失败，请手动复制'))
