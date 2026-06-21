@@ -14,7 +14,7 @@ export function ApiDocModal({ onClose }: { onClose: () => void }) {
 
   function copyHint() {
     const hint = `Read the full REST API spec for the OKX Quant Console from:
-GET http://127.0.0.1:8787/api_spec
+GET http://127.0.0.1:8787/api/api_spec
 Interactive docs: http://127.0.0.1:8787/docs`
     navigator.clipboard.writeText(hint)
       .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })

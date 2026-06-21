@@ -73,7 +73,7 @@ python scripts/trader_daemon.py --job runtime/jobs/<job_id>.json
 
 `api/`（FastAPI，绑 `127.0.0.1`）：`routes_monitor.py`（GET，公开）与 `routes_control.py`（POST/DELETE，全部需 `X-API-Token` 头，由 `api/__init__.py::verify_token` 校验）。控制层是对 `core/` 能力的薄封装（触发回测、启停实盘、网格搜索、多币回测、策略文件 CRUD、.env 编辑、缓存清理）。回测结果落 `backtests` 表，由 `GET /api/backtests/{id}` 读取。
 
-完整 REST API 规范见 **[docs/api-spec.md](docs/api-spec.md)**。关键注意：`balance` 是可用余额（free），`equity` 才是总权益（对应 OKX App 显示的账户权益）。
+完整 REST API 规范见 `GET /api/api_spec`（源码 `api/spec.py`）。关键注意：`balance` 是可用余额（free），`equity` 才是总权益（对应 OKX App 显示的账户权益）。
 
 ## React 前端
 

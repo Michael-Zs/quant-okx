@@ -235,7 +235,7 @@ curl -X POST http://127.0.0.1:8787/api/multi_backtest \\
        "allocation":{"BTC-USDT-SWAP":1.0,"ETH-USDT-SWAP":1.0,"SOL-USDT-SWAP":1.0}}'
 # → {metrics, equity:{ts,equity}, per_symbol:[{symbol,weight,metrics,equity}],
 #     holdings:{ts,symbols,matrix}, initial_capital}
-``
+```
 
 ### 工作流 E：参数网格搜索
 ```bash
@@ -246,7 +246,7 @@ curl -X POST http://127.0.0.1:8787/api/grid_search \\
        "symbol":"BTC-USDT-SWAP","bar":"1H","days":180,"metric":"sharpe","n_jobs":4}'
 # → {results:[{ma_fast,ma_slow,total_return,sharpe,...}, ...]（按 metric 降序）,
 #     keys:["ma_fast","ma_slow"], metric:"sharpe", count:N}
-``
+```
 
 ### 工作流 F：让控制台「学会」一个新策略（写 .py 保存即注册）
 先 `GET /api/strategy_spec?kind=single`（或 `multi`）拿到策略开发规范，让 Agent 按规范产出代码，然后：
