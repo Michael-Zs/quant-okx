@@ -12,8 +12,6 @@ export default function Deploy() {
   const [name, setName] = useState('')
   const [isDemo, setIsDemo] = useState(true)
   const [bar, setBar] = useState('1H')
-  const INTERVAL_MAP: Record<string, number> = { '1H': 3600, '4H': 14400, '1D': 86400 }
-  const checkIntervalSec = INTERVAL_MAP[bar] || 3600
   const [symbols, setSymbols] = useState<string[]>(['BTC-USDT-SWAP'])
   const [instruments, setInstruments] = useState<string[]>(['BTC-USDT-SWAP', 'ETH-USDT-SWAP', 'SOL-USDT-SWAP'])
   const [leverage, setLeverage] = useState(5)
@@ -52,7 +50,6 @@ export default function Deploy() {
         name, is_demo: isDemo, bar,
         symbols,
         groups: groupRefs, leverage, position_ratio: positionRatio, initial_capital: initialCapital,
-        check_interval_sec: checkIntervalSec,
       })
       await refresh()
       setMsg(`✓ 部署「${name}」已创建 (id: ${d.id})`)

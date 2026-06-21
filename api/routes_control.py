@@ -81,6 +81,8 @@ def _build_node(req: BacktestRequest):
 
 # ---------- 部署 ----------
 
+_BAR_INTERVAL = {"1H": 3600, "4H": 14400, "1D": 86400}
+
 @router.post("/deployments")
 def create_deployment(req: DeploymentCreate):
     init_db()
@@ -89,7 +91,8 @@ def create_deployment(req: DeploymentCreate):
     groups = [g.model_dump() for g in req.groups]
     did = R.create_deployment(name=req.name, is_demo=req.is_demo, bar=req.bar,
                               symbols=req.symbols, groups=groups,
-                              check_interval_sec=req.check_interval_sec, leverage=req.leverage,
+                              check_interval_sec=_BAR_INTERVAL.get(req.bar, 3600),
+                              leverage=req.leverage,
                               position_ratio=req.position_ratio, initial_capital=req.initial_capital)
     return R.get_deployment(did)
 
@@ -100,6 +103,8 @@ def update_deployment(did: str, req: DeploymentUpdate):
     fields = {k: v for k, v in req.model_dump(exclude_unset=True).items() if v is not None}
     if "groups" in fields:
         fields["groups"] = [g.model_dump() for g in fields["groups"]]
+    if "bar" in fields:
+        fields["check_interval_sec"] = _BAR_INTERVAL.get(fields["bar"], 3600)
     if not R.update_deployment(did, **fields):
         raise HTTPException(404, f"未知部署: {did}")
     return R.get_deployment(did)

@@ -57,7 +57,6 @@ class DeploymentCreate(BaseModel):
     bar: str = "1H"
     symbols: list[str] = ["BTC-USDT-SWAP"]   # 单币策略批量运行的 symbol 列表
     groups: list[GroupRefSpec]
-    check_interval_sec: int = 3600
     leverage: int = 5
     position_ratio: float = 0.1
     initial_capital: float = 10000.0
@@ -69,7 +68,6 @@ class DeploymentUpdate(BaseModel):
     bar: Optional[str] = None
     symbols: Optional[list[str]] = None
     groups: Optional[list[GroupRefSpec]] = None
-    check_interval_sec: Optional[int] = None
     leverage: Optional[int] = None
     position_ratio: Optional[float] = None
     initial_capital: Optional[float] = None
