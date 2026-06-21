@@ -3,6 +3,7 @@
 - POST /api/backtest：统一吃 node_spec 或 ref_id，经 run_node 回测，结果落 backtests 表。
 - 部署 CRUD + 启停（start_deployment 起 daemon --deployment）。
 """
+from __future__ import annotations
 import re
 from dataclasses import asdict
 from typing import Optional

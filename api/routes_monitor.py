@@ -1,4 +1,5 @@
 """监控类路由（GET）：行情/模板/部署/回测历史/账户。"""
+from __future__ import annotations
 import math
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
