@@ -16,9 +16,11 @@ runtime/state/*
 runtime/logs/*
 runtime/backtests/*
 runtime/console.db
+runtime/db.sqlite3
 !runtime/jobs/.gitkeep
 !runtime/state/.gitkeep
 !runtime/logs/.gitkeep
+!runtime/backtests/.gitkeep
 
 # 用户策略目录（本地生成的 .py 不进版本库，保留 README 说明）
 strategies/*
