@@ -30,6 +30,19 @@ def client():
 H = {"X-API-Token": "testtoken"}
 
 
+def _dummy_ohlcv(periods: int = 48) -> pd.DataFrame:
+    ts = pd.date_range("2026-01-01", periods=periods, freq="h")
+    close = [100 + i for i in range(periods)]
+    return pd.DataFrame({
+        "ts": ts,
+        "open": close,
+        "high": [v + 1 for v in close],
+        "low": [v - 1 for v in close],
+        "close": close,
+        "volume": [1.0] * periods,
+    })
+
+
 def test_templates_listed(client):
     r = client.get("/api/templates")
     assert r.status_code == 200
@@ -176,3 +189,55 @@ def test_sampling_helper_keeps_first_and_last_points():
     assert sampled["returned_points"] == 4
     assert sampled["equity"][0] == 0.0
     assert sampled["equity"][-1] == 8.0
+
+
+def test_multi_backtest_supports_days_list_and_summaries(client, monkeypatch):
+    import api.routes_control as rc
+    monkeypatch.setattr(rc, "get_data", lambda symbol, bar, days: _dummy_ohlcv(64))
+
+    req = {
+        "node_spec": {
+            "node_type": "leaf",
+            "name": "eq",
+            "template_name": "equal_weight",
+            "strategy_kind": "multi",
+            "params": {},
+        },
+        "symbols": ["BTC-USDT-SWAP", "ETH-USDT-SWAP"],
+        "bar": "1H",
+        "days_list": [10, 20],
+        "max_points": 5,
+        "response_mode": "compact",
+    }
+    r = client.post("/api/multi_backtest", json=req, headers=H)
+    assert r.status_code == 200
+    data = r.json()
+    assert data["days_list"] == [10, 20]
+    assert len(data["windows"]) == 2
+    first = data["windows"][0]
+    assert first["equity"]["returned_points"] == 5
+    assert first["holdings"]["returned_points"] == 5
+    assert first["key_points"]["start_equity"] == 10000.0
+    assert "trade_summary" in first
+
+
+def test_grid_search_supports_multi_strategy_symbols(client, monkeypatch):
+    import api.routes_control as rc
+    monkeypatch.setattr(rc, "get_data", lambda symbol, bar, days: _dummy_ohlcv(48))
+
+    req = {
+        "template_name": "equal_weight",
+        "strategy_kind": "multi",
+        "symbols": ["BTC-USDT-SWAP", "ETH-USDT-SWAP"],
+        "bar": "1H",
+        "days_list": [10, 20],
+        "metric": "robust_score",
+        "param_ranges": {"dummy": [1, 2, 1]},
+        "n_jobs": 1,
+    }
+    r = client.post("/api/grid_search", json=req, headers=H)
+    assert r.status_code == 200
+    data = r.json()
+    assert data["count"] == 2
+    assert "windows" in data["results"][0]
+    assert "robust_score" in data["results"][0]

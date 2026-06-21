@@ -56,7 +56,7 @@ curl -H "X-API-Token: $TOKEN" http://127.0.0.1:8787/api/balance?is_demo=true
 | `GET /api/deployments/{did}/state` | 部署实时状态（含 `balance` 可用余额 + `equity` 总权益） |
 | `GET /api/deployments/{did}/logs?n=50` | 部署事件日志 |
 | `GET /api/backtests?ref_id=&node_kind=&limit=50` | 回测历史列表 |
-| `GET /api/backtests/{bid}?with_equity=true` | 单次回测详情（含权益曲线） |
+| `GET /api/backtests/{bid}?with_equity=true&max_points=200` | 单次回测详情（含权益曲线，可采样） |
 | `GET /api/balance?is_demo=true` ⚑ | 账户余额（返回 `balance` 可用 + `equity` 总权益） |
 | `GET /api/positions?is_demo=true&symbol=BTC-USDT-SWAP` ⚑ | 当前持仓（需 token） |
 
@@ -86,9 +86,9 @@ curl -H "X-API-Token: $TOKEN" http://127.0.0.1:8787/api/balance?is_demo=true
 ### 控制类（全部需 token）
 | 方法 路径 | 用途 |
 |---|---|
-| `POST /api/backtest` | **统一回测**（吃 node_spec 或 ref_id，落 backtests 表） |
-| `POST /api/multi_backtest` | 多币回测（返回 per_symbol 明细 + holdings 矩阵） |
-| `POST /api/grid_search` | 参数网格搜索（穷举组合 → 按 metric 排序） |
+| `POST /api/backtest` | **统一回测**（吃 node_spec 或 ref_id，落 backtests 表；支持 `max_points` / `response_mode`） |
+| `POST /api/multi_backtest` | 多币回测（返回 per_symbol 明细 + holdings 矩阵；支持 `days_list` 多窗口） |
+| `POST /api/grid_search` | 参数网格搜索（单币 / 多币；多币支持 `symbols` + `node_spec` + `days_list`） |
 | `POST /api/user_strategies` | 保存用户策略 `.py` 到 strategies/ 并重载注册表 |
 | `DELETE /api/user_strategies/{name}` | 删除用户策略文件 |
 | `POST /api/deployments` ⚑ | 新建部署（需先有 group） |
@@ -231,10 +231,19 @@ curl -X POST http://127.0.0.1:8787/api/multi_backtest \\
   -d '{"node_spec":{"node_type":"leaf","name":"mr","template_name":"momentum_rotation",
                      "strategy_kind":"multi","params":{"period":24,"top_k":1,"rebalance":24}},
        "symbols":["BTC-USDT-SWAP","ETH-USDT-SWAP","SOL-USDT-SWAP"],
-       "bar":"1H","days":180,
+       "bar":"1H","days":180,"max_points":120,"response_mode":"compact",
        "allocation":{"BTC-USDT-SWAP":1.0,"ETH-USDT-SWAP":1.0,"SOL-USDT-SWAP":1.0}}'
-# → {metrics, equity:{ts,equity}, per_symbol:[{symbol,weight,metrics,equity}],
-#     holdings:{ts,symbols,matrix}, initial_capital}
+# → {metrics, equity:{ts,equity,sampled,...}, key_points, trade_summary,
+#     per_symbol:[{symbol,weight,metrics,...}], holdings:{ts,symbols,matrix,...}, initial_capital}
+
+# 多窗口稳健性检查
+curl -X POST http://127.0.0.1:8787/api/multi_backtest \\
+  -H "X-API-Token: $TOKEN" -H "Content-Type: application/json" \\
+  -d '{"node_spec":{"node_type":"leaf","name":"mr","template_name":"momentum_rotation",
+                     "strategy_kind":"multi","params":{"period":24,"top_k":1,"rebalance":24}},
+       "symbols":["BTC-USDT-SWAP","ETH-USDT-SWAP","SOL-USDT-SWAP"],
+       "bar":"1H","days_list":[90,180,270],"response_mode":"compact"}'
+# → {windows:[{days,metrics,key_points,trade_summary,...}, ...], bar, symbols, days_list}
 ```
 
 ### 工作流 E：参数网格搜索
@@ -246,6 +255,15 @@ curl -X POST http://127.0.0.1:8787/api/grid_search \\
        "symbol":"BTC-USDT-SWAP","bar":"1H","days":180,"metric":"sharpe","n_jobs":4}'
 # → {results:[{ma_fast,ma_slow,total_return,sharpe,...}, ...]（按 metric 降序）,
 #     keys:["ma_fast","ma_slow"], metric:"sharpe", count:N}
+
+# 多币参数搜索（跨窗口）
+curl -X POST http://127.0.0.1:8787/api/grid_search \\
+  -H "X-API-Token: $TOKEN" -H "Content-Type: application/json" \\
+  -d '{"template_name":"momentum_rotation","strategy_kind":"multi",
+       "symbols":["BTC-USDT-SWAP","ETH-USDT-SWAP","SOL-USDT-SWAP"],
+       "param_ranges":{"period":[12,36,12],"top_k":[1,2,1]},
+       "bar":"4H","days_list":[90,180,270],"metric":"robust_score","n_jobs":2}'
+# → {results:[{period,top_k,windows,min_total_return,max_drawdown_worst,avg_sharpe,robust_score,...}, ...]}
 ```
 
 ### 工作流 F：让控制台「学会」一个新策略（写 .py 保存即注册）

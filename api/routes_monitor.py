@@ -9,7 +9,7 @@ from core.persist import repositories as R
 from core.persist.db import init_db
 from core.live import runtime as Rt
 from api import verify_token
-from api.response_sampling import sample_curve
+from api.response_sampling import sample_curve, summarize_equity
 
 router = APIRouter(prefix="/api")
 
@@ -174,7 +174,9 @@ def backtest_detail(bid: str, with_equity: bool = True, max_points: int | None =
         raise HTTPException(404, f"未知回测: {bid}")
     if with_equity and bt.get("equity"):
         import pandas as pd
-        bt["equity"] = sample_curve(pd.DataFrame(bt["equity"]), "equity", max_points)
+        eq = pd.DataFrame(bt["equity"])
+        bt["key_points"] = summarize_equity(eq)
+        bt["equity"] = sample_curve(eq, "equity", max_points)
     return bt
 
 

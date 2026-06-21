@@ -87,3 +87,5 @@ class BacktestRequest(BaseModel):
     position_ratio: float = 0.1
     fee_rate: float = 0.0005
     slippage: float = 0.0005
+    max_points: Optional[int] = None
+    response_mode: str = "full"

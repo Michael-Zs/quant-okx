@@ -15,7 +15,7 @@ from core.data.cache import get_data, clear_cache
 from core.data.symbols import bars_per_year
 from core.backtest.engine import run_node, BacktestConfig
 from core.backtest.multi import run_multi
-from core.backtest.gridsearch import grid_search, arange_values
+from core.backtest.gridsearch import grid_search, grid_search_multi, arange_values
 from core.persist import repositories as R
 from core.persist.db import init_db
 from core.live import runtime as Rt
@@ -23,7 +23,7 @@ from core.utils.config import settings
 from api import verify_token
 from api.schemas import BacktestRequest, DeploymentCreate, DeploymentUpdate
 from api.routes_monitor import _clean
-from api.response_sampling import sample_curve, sample_holdings
+from api.response_sampling import sample_curve, sample_holdings, summarize_equity, summarize_trades
 
 router = APIRouter(prefix="/api", dependencies=[Depends(verify_token)])
 
@@ -33,6 +33,8 @@ def backtest(req: BacktestRequest):
     """统一回测：node_spec 或 (ref_kind, ref_id) → run_node → 落 backtests 表。"""
     init_db()
     StrategyRegistry.discover_all()
+    if req.response_mode not in {"full", "compact"}:
+        raise HTTPException(400, "response_mode 仅支持 full 或 compact")
     try:
         node = _build_node(req)
         symbols = req.symbols or [req.symbol]
@@ -55,10 +57,19 @@ def backtest(req: BacktestRequest):
                           spec=node.to_spec(), metrics=_clean(outcome.metrics),
                           cfg=asdict(cfg), symbol=",".join(symbols), bar=req.bar,
                           days=req.days, equity_df=eq)
-    return {"backtest_id": bid, "report_kind": outcome.report_kind,
+    resp = {"backtest_id": bid, "report_kind": outcome.report_kind,
             "metrics": _clean(outcome.metrics), "n_trades": len(outcome.trades),
             "equity_start": float(eq["equity"].iloc[0]),
-            "equity_end": float(eq["equity"].iloc[-1])}
+            "equity_end": float(eq["equity"].iloc[-1]),
+            "key_points": summarize_equity(eq),
+            "trade_summary": summarize_trades(
+                outcome.trades, bars_per_year=cfg.bars_per_year,
+                initial_capital=cfg.initial_capital,
+            ),
+            "response_mode": req.response_mode}
+    if req.response_mode == "full":
+        resp["equity"] = sample_curve(eq, "equity", req.max_points)
+    return resp
 
 
 def _build_node(req: BacktestRequest):
@@ -173,13 +184,21 @@ class GridSearchRequest(BaseModel):
     template_name: str
     param_ranges: dict            # {参数名: [lo, hi, step]}
     symbol: str = "BTC-USDT-SWAP"
+    symbols: Optional[list[str]] = None
     bar: str = "1H"
     days: int = 180
+    days_list: Optional[list[int]] = None
     metric: str = "total_return"  # total_return | sharpe | calmar | sortino
     n_jobs: int = 1
     initial_capital: float = 10000.0
     leverage: int = 5
     position_ratio: float = 0.1
+    fee_rate: float = 0.0005
+    slippage: float = 0.0005
+    strategy_kind: Optional[str] = None
+    node_spec: Optional[dict] = None
+    allocation: Optional[dict[str, float]] = None
+    invert: bool = False
 
 
 @router.post("/grid_search")
@@ -198,13 +217,51 @@ def grid_search_route(req: GridSearchRequest):
         param_grid[pname] = arange_values(float(rng[0]), float(rng[1]), float(rng[2]))
     if not param_grid:
         raise HTTPException(400, "未提供任何参数范围")
-    try:
-        df = get_data(req.symbol, req.bar, req.days)
-    except Exception as e:
-        raise HTTPException(400, f"数据加载失败: {e}")
-    cfg = BacktestConfig(initial_capital=req.initial_capital, leverage=req.leverage,
-                         position_ratio=req.position_ratio, bars_per_year=bars_per_year(req.bar))
-    results = grid_search(cls, df, cfg, param_grid, metric=req.metric, n_jobs=req.n_jobs)
+    cfg = BacktestConfig(
+        initial_capital=req.initial_capital, leverage=req.leverage,
+        position_ratio=req.position_ratio, fee_rate=req.fee_rate,
+        slippage=req.slippage, bars_per_year=bars_per_year(req.bar),
+    )
+    is_multi = (
+        (req.strategy_kind or "").lower() == "multi"
+        or bool(req.symbols)
+        or (req.node_spec is not None)
+    )
+    if is_multi:
+        symbols = req.symbols or ([req.symbol] if req.symbol else [])
+        if not symbols:
+            raise HTTPException(400, "multi grid_search 需提供 symbols")
+        node_spec = req.node_spec or {
+            "node_type": "leaf",
+            "name": req.template_name,
+            "template_name": req.template_name,
+            "strategy_kind": "multi",
+            "params": {},
+        }
+        days_list = req.days_list or [req.days]
+        try:
+            results = grid_search_multi(
+                node_spec=node_spec,
+                symbols=symbols,
+                bar=req.bar,
+                days_list=days_list,
+                cfg=cfg,
+                param_grid=param_grid,
+                metric=req.metric,
+                allocation=req.allocation,
+                invert=req.invert,
+                n_jobs=req.n_jobs,
+            )
+        except KeyError as e:
+            raise HTTPException(404, str(e))
+        except Exception as e:
+            raise HTTPException(400, str(e))
+    else:
+        try:
+            df = get_data(req.symbol, req.bar, req.days)
+        except Exception as e:
+            raise HTTPException(400, f"数据加载失败: {e}")
+        results = grid_search(cls, df, cfg, param_grid, metric=req.metric, n_jobs=req.n_jobs)
     return {"results": _clean_rows(results), "keys": list(param_grid.keys()),
             "metric": req.metric, "count": len(results)}
 
@@ -226,6 +283,7 @@ class MultiBacktestRequest(BaseModel):
     symbols: list[str]
     bar: str = "1H"
     days: int = 180
+    days_list: Optional[list[int]] = None
     allocation: Optional[dict[str, float]] = None   # {symbol: weight}，默认等权
     invert: bool = False
     initial_capital: float = 10000.0
@@ -245,38 +303,80 @@ def multi_backtest(req: MultiBacktestRequest):
         raise HTTPException(400, "symbols 不能为空")
     if req.response_mode not in {"full", "compact"}:
         raise HTTPException(400, "response_mode 仅支持 full 或 compact")
+    days_list = req.days_list or [req.days]
     try:
-        data = {sym: get_data(sym, req.bar, req.days) for sym in req.symbols}
-        ctx = NodeContext(data=data, primary_symbol=req.symbols[0], bar=req.bar)
-        node = node_from_spec(req.node_spec)
-        signals = node.generate_signals(ctx)
-        cfg = BacktestConfig(initial_capital=req.initial_capital, leverage=req.leverage,
-                             position_ratio=req.position_ratio, fee_rate=req.fee_rate,
-                             slippage=req.slippage, bars_per_year=bars_per_year(req.bar))
-        rep = run_multi(signals, cfg, allocation=req.allocation, invert=req.invert)
+        windows = [
+            _serialize_multi_report(
+                _run_multi_for_days(req, days),
+                max_points=req.max_points,
+                response_mode=req.response_mode,
+                days=days,
+                bar=req.bar,
+                symbols=req.symbols,
+            )
+            for days in days_list
+        ]
     except KeyError as e:
         raise HTTPException(404, str(e))
     except Exception as e:
         raise HTTPException(400, str(e))
 
-    compact = req.response_mode == "compact"
+    if req.days_list:
+        return {
+            "windows": windows,
+            "response_mode": req.response_mode,
+            "bar": req.bar,
+            "symbols": req.symbols,
+            "days_list": days_list,
+        }
+    return windows[0]
+
+
+def _run_multi_for_days(req: MultiBacktestRequest, days: int):
+    data = {sym: get_data(sym, req.bar, days) for sym in req.symbols}
+    ctx = NodeContext(data=data, primary_symbol=req.symbols[0], bar=req.bar)
+    node = node_from_spec(req.node_spec)
+    signals = node.generate_signals(ctx)
+    cfg = BacktestConfig(initial_capital=req.initial_capital, leverage=req.leverage,
+                         position_ratio=req.position_ratio, fee_rate=req.fee_rate,
+                         slippage=req.slippage, bars_per_year=bars_per_year(req.bar))
+    return run_multi(signals, cfg, allocation=req.allocation, invert=req.invert)
+
+
+def _serialize_multi_report(rep, *, max_points: int | None, response_mode: str,
+                            days: int, bar: str, symbols: list[str]) -> dict:
+    compact = response_mode == "compact"
     per_symbol = []
     for sym, w, r in rep.per_symbol:
-        item = {
-            "symbol": sym, "weight": w, "metrics": _clean(r.metrics),
-        }
+        item = {"symbol": sym, "weight": w, "metrics": _clean(r.metrics)}
         if not compact:
-            item["equity"] = [float(x) for x in r.equity_curve["equity"].tolist()]
+            item["equity"] = (
+                sample_curve(r.equity_curve, "equity", max_points) or {"equity": []}
+            )["equity"]
         per_symbol.append(item)
-
     return {
+        "days": days,
+        "bar": bar,
+        "symbols": symbols,
         "metrics": _clean(rep.metrics),
-        "equity": sample_curve(rep.equity_curve, "equity", req.max_points),
+        "equity": sample_curve(rep.equity_curve, "equity", max_points),
         "per_symbol": per_symbol,
-        "holdings": sample_holdings(rep.holdings, req.max_points),
+        "holdings": sample_holdings(rep.holdings, max_points),
+        "key_points": summarize_equity(rep.equity_curve),
+        "trade_summary": summarize_trades(
+            _concat_multi_trades(rep.per_symbol),
+            bars_per_year=bars_per_year(bar),
+            initial_capital=rep.initial_capital,
+        ),
         "initial_capital": rep.initial_capital,
-        "response_mode": req.response_mode,
+        "response_mode": response_mode,
     }
+
+
+def _concat_multi_trades(per_symbol: list) -> object:
+    import pandas as pd
+    parts = [r.trades.assign(symbol=sym) for sym, _w, r in per_symbol if not r.trades.empty]
+    return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
 
 
 # ---------- 设置：.env 编辑 / 缓存清理 ----------

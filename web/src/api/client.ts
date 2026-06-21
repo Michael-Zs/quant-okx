@@ -57,7 +57,7 @@ export const api = {
 
   // 回测
   backtest: (data: Record<string, unknown>) =>
-    req<{ backtest_id: string; metrics: BacktestMetrics; report_kind: string; n_trades: number; equity_start: number; equity_end: number }>(
+    req<{ backtest_id: string; metrics: BacktestMetrics; report_kind: string; n_trades: number; equity_start: number; equity_end: number; equity?: { ts: string[]; equity: number[] } }>(
       '/backtest', { method: 'POST', body: JSON.stringify(data) }),
 
   // ---- 策略实验室 ----
@@ -65,9 +65,9 @@ export const api = {
   saveUserStrategy: (data: { name: string; code: string }) =>
     req<{ ok: boolean; name: string; registered: boolean; names: string[] }>('/user_strategies', { method: 'POST', body: JSON.stringify(data) }),
   deleteUserStrategy: (name: string) => req<{ ok: boolean; deleted: string }>(`/user_strategies/${name}`, { method: 'DELETE' }),
-  gridSearch: (data: { template_name: string; param_ranges: Record<string, [number, number, number]>; symbol: string; bar: string; days: number; metric: string; n_jobs?: number }) =>
+  gridSearch: (data: { template_name: string; param_ranges: Record<string, [number, number, number]>; symbol?: string; symbols?: string[]; bar: string; days?: number; days_list?: number[]; metric: string; n_jobs?: number; node_spec?: NodeSpec; strategy_kind?: string; allocation?: Record<string, number>; invert?: boolean }) =>
     req<{ results: GridSearchResult[]; keys: string[]; metric: string; count: number }>('/grid_search', { method: 'POST', body: JSON.stringify(data) }),
-  multiBacktest: (data: { node_spec: NodeSpec; symbols: string[]; bar: string; days: number; allocation?: Record<string, number>; invert?: boolean; initial_capital?: number; leverage?: number; position_ratio?: number }) =>
+  multiBacktest: (data: { node_spec: NodeSpec; symbols: string[]; bar: string; days?: number; days_list?: number[]; allocation?: Record<string, number>; invert?: boolean; initial_capital?: number; leverage?: number; position_ratio?: number; max_points?: number; response_mode?: 'full' | 'compact' }) =>
     req<MultiReport>('/multi_backtest', { method: 'POST', body: JSON.stringify(data) }),
 
   // ---- 设置 ----

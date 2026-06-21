@@ -114,7 +114,7 @@ export interface UserStrategy {
 }
 
 export interface GridSearchResult {
-  [param: string]: number | string
+  [param: string]: number | string | Record<string, BacktestMetrics>
   total_return: number
   sharpe: number
   max_drawdown: number
@@ -122,9 +122,39 @@ export interface GridSearchResult {
   calmar: number
   win_rate: number
   n_trades: number
+  windows?: Record<string, BacktestMetrics>
+  min_total_return?: number
+  max_drawdown_worst?: number
+  avg_sharpe?: number
+  robust_score?: number
 }
 
 // ---- 多币回测明细 ----
+export interface KeyPoints {
+  start_ts: string
+  start_equity: number
+  end_ts: string
+  end_equity: number
+  peak_ts: string
+  peak_equity: number
+  trough_ts: string
+  trough_equity: number
+  max_drawdown: number
+  max_drawdown_start_ts: string
+  max_drawdown_start_equity: number
+  max_drawdown_end_ts: string
+  max_drawdown_end_equity: number
+}
+export interface TradeSummary {
+  n_entries: number
+  n_long_entries: number
+  n_short_entries: number
+  n_closes: number
+  switch_count: number
+  avg_hold_bars: number
+  turnover: number
+  bars_per_year?: number | null
+}
 export interface PerSymbolReport {
   symbol: string
   weight: number
@@ -139,6 +169,9 @@ export interface SampledSeries {
   returned_points?: number
 }
 export interface MultiReport {
+  days?: number
+  bar?: string
+  symbols?: string[]
   metrics: BacktestMetrics
   equity: SampledSeries
   per_symbol: PerSymbolReport[]
@@ -150,8 +183,17 @@ export interface MultiReport {
     total_points?: number
     returned_points?: number
   }
+  key_points?: KeyPoints | null
+  trade_summary?: TradeSummary
   initial_capital: number
   response_mode?: 'full' | 'compact'
+}
+export interface MultiWindowReport {
+  windows: MultiReport[]
+  response_mode?: 'full' | 'compact'
+  bar: string
+  symbols: string[]
+  days_list: number[]
 }
 
 // ---- 设置 ----
