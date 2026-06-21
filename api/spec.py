@@ -97,7 +97,7 @@ curl -H "X-API-Token: $TOKEN" http://127.0.0.1:8787/api/balance?is_demo=true
 | `POST /api/deployments/{did}/stop` | 停止部署 |
 | `DELETE /api/deployments/{did}` | 删除部署 |
 | `POST /api/config/env` | 写 OKX 凭证到 `.env` |
-| `POST /api/cache/clear` | 清空 K 线缓存 |
+| `POST /api/cache/clear` | 清空缓存（默认含 K 线 parquet + 交易对列表 JSON；可按 symbol/bar 定向清 parquet） |
 
 ⚑ = 需 `X-API-Token`。
 

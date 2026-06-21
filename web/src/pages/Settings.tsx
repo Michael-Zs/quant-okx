@@ -28,7 +28,7 @@ export default function Settings() {
   }
 
   async function clearCache() {
-    if (!confirm(`确定清空全部缓存（${cfg?.cache.count ?? 0} 个 parquet 文件）？下次拉数据需重新请求 OKX。`)) return
+    if (!confirm(`确定清空全部缓存（${cfg?.cache.count ?? 0} 个文件，含 K 线 parquet 与交易对列表 JSON）？下次拉数据需重新请求 OKX。`)) return
     setLoading(true)
     try {
       const r = await api.clearCache()
@@ -96,13 +96,16 @@ export default function Settings() {
       {/* 缓存 */}
       <Card className="mb-5">
         <CardHeader title={<span className="flex items-center gap-2"><Database size={15} /> 数据缓存</span>}
-          subtitle="parquet K 线缓存，访问时自动增量更新。"
+          subtitle="K 线 parquet 缓存 + 交易对列表 JSON 缓存。"
           action={<Button variant="ghost" onClick={refresh}><RefreshCw size={14} className="inline mr-1" />刷新</Button>} />
         <div className="px-4 pb-4">
           <div className="text-sm space-y-1 mb-3">
             <div><span className="text-dim">目录：</span><code className="text-text text-xs">{cfg?.cache.dir ?? '—'}</code></div>
             <div><span className="text-dim">文件数：</span><span className="text-text">{cfg?.cache.count ?? '—'}</span>
                   <span className="text-dim"> ｜ 大小：</span><span className="text-text">{cfg ? `${(cfg.cache.size_bytes / 1024 / 1024).toFixed(1)} MB` : '—'}</span></div>
+            <div><span className="text-dim">明细：</span><span className="text-text">
+              {cfg ? `parquet ${cfg.cache.parquet_count} / JSON ${cfg.cache.json_count}` : '—'}
+            </span></div>
             <div><span className="text-dim">策略目录：</span><code className="text-text text-xs">{cfg?.strategies_dir ?? '—'}</code></div>
           </div>
           <Button variant="danger" onClick={clearCache} disabled={loading || !cfg?.cache.count}>

@@ -146,6 +146,14 @@ export interface ConfigInfo {
   api_port: number
   api_token_set: boolean
   defaults: { leverage: number; position_ratio: number; fee: number; slippage: number }
-  cache: { dir: string; count: number; size_bytes: number }
+  cache: {
+    dir: string
+    count: number
+    size_bytes: number
+    parquet_count: number
+    parquet_size_bytes: number
+    json_count: number
+    json_size_bytes: number
+  }
   strategies_dir: string
 }

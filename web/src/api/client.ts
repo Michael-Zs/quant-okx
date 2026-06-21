@@ -74,7 +74,13 @@ export const api = {
   config: () => req<ConfigInfo>('/config'),
   updateEnv: (data: { OKX_API_KEY?: string; OKX_API_SECRET?: string; OKX_API_PASSPHRASE?: string }) =>
     req<{ ok: boolean; updated: string[]; note: string }>('/config/env', { method: 'POST', body: JSON.stringify(data) }),
-  clearCache: () => req<{ cleared: number }>('/cache/clear', { method: 'POST' }),
+  clearCache: (params?: { symbol?: string; bar?: string; include_instruments?: boolean }) => {
+    const qs = new URLSearchParams()
+    if (params?.symbol) qs.set('symbol', params.symbol)
+    if (params?.bar) qs.set('bar', params.bar)
+    if (params?.include_instruments !== undefined) qs.set('include_instruments', String(params.include_instruments))
+    return req<{ cleared: number }>(`/cache/clear${qs.size ? `?${qs.toString()}` : ''}`, { method: 'POST' })
+  },
 }
 
 // WS 实时回测预览（组合页拖动时推送）

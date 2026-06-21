@@ -73,9 +73,8 @@ def user_strategies():
 def get_config():
     """设置页用：脱敏返回当前配置（OKX 是否配置、API 地址、默认参数、缓存信息）。"""
     from core.utils.config import settings
-    from core.data.cache import _path as _cache_path
-    cache_files = list(settings.CACHE_DIR.glob("*.parquet")) if settings.CACHE_DIR.exists() else []
-    cache_size = sum(f.stat().st_size for f in cache_files)
+    from core.data.cache import cache_stats
+    cache = cache_stats()
     return {
         "okx_configured": bool(settings.OKX_API_KEY and settings.OKX_API_SECRET
                                 and settings.OKX_API_PASSPHRASE),
@@ -88,11 +87,7 @@ def get_config():
             "fee": settings.DEFAULT_FEE,
             "slippage": settings.DEFAULT_SLIPPAGE,
         },
-        "cache": {
-            "dir": str(settings.CACHE_DIR),
-            "count": len(cache_files),
-            "size_bytes": cache_size,
-        },
+        "cache": cache,
         "strategies_dir": str(settings.STRATEGIES_DIR),
     }
 

@@ -309,5 +309,7 @@ def update_env(req: EnvUpdate):
 
 
 @router.post("/cache/clear")
-def clear_cache_route():
-    return {"cleared": clear_cache()}
+def clear_cache_route(symbol: str | None = None, bar: str | None = None,
+                      include_instruments: bool = True):
+    return {"cleared": clear_cache(symbol=symbol, bar=bar,
+                                   include_instruments=include_instruments)}

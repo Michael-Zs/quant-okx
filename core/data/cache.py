@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 import time
+from pathlib import Path
 import pandas as pd
 
 from core.utils.config import settings
@@ -14,6 +15,36 @@ from core.data.fetcher import fetch_history, fetch_candles, _to_df
 
 def _path(symbol: str, bar: str) -> "Path":
     return settings.CACHE_DIR / f"{symbol.replace('-', '_')}_{bar}.parquet"
+
+
+def _parquet_glob(symbol: str | None = None, bar: str | None = None) -> str:
+    sym = symbol.replace("-", "_") if symbol else "*"
+    interval = bar if bar else "*"
+    return f"{sym}_{interval}.parquet"
+
+
+def list_cache_files(include_instruments: bool = True) -> list[Path]:
+    if not settings.CACHE_DIR.exists():
+        return []
+    files = list(settings.CACHE_DIR.glob("*.parquet"))
+    if include_instruments:
+        files.extend(settings.CACHE_DIR.glob("swap_instruments_*.json"))
+    return sorted(files)
+
+
+def cache_stats() -> dict:
+    files = list_cache_files(include_instruments=True)
+    parquet_files = [p for p in files if p.suffix == ".parquet"]
+    json_files = [p for p in files if p.suffix == ".json"]
+    return {
+        "dir": str(settings.CACHE_DIR),
+        "count": len(files),
+        "size_bytes": sum(p.stat().st_size for p in files),
+        "parquet_count": len(parquet_files),
+        "parquet_size_bytes": sum(p.stat().st_size for p in parquet_files),
+        "json_count": len(json_files),
+        "json_size_bytes": sum(p.stat().st_size for p in json_files),
+    }
 
 
 def load_cached(symbol: str, bar: str) -> pd.DataFrame | None:
@@ -87,15 +118,15 @@ def get_data(symbol: str, bar: str = "1H", days: int = 365,
     return cached[cached["ts"] >= cutoff].reset_index(drop=True)
 
 
-def clear_cache(symbol: str | None = None, bar: str | None = None) -> int:
-    """清缓存。不传参则清全部。返回删除文件数。"""
+def clear_cache(symbol: str | None = None, bar: str | None = None,
+                include_instruments: bool = True) -> int:
+    """清缓存。支持按 symbol/bar 精确清 parquet；可选同时清交易对 JSON 缓存。"""
     n = 0
-    if symbol:
-        for p in settings.CACHE_DIR.glob(f"{symbol.replace('-', '_')}_*.parquet"):
-            p.unlink()
-            n += 1
-    else:
-        for p in settings.CACHE_DIR.glob("*.parquet"):
+    for p in settings.CACHE_DIR.glob(_parquet_glob(symbol, bar)):
+        p.unlink()
+        n += 1
+    if include_instruments and not symbol and not bar:
+        for p in settings.CACHE_DIR.glob("swap_instruments_*.json"):
             p.unlink()
             n += 1
     return n

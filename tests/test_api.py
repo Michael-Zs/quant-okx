@@ -12,7 +12,9 @@ def tmp_env(tmp_path, monkeypatch):
     from core.persist import db
     monkeypatch.setattr(settings, "DB_PATH", tmp_path / "test.db")
     monkeypatch.setattr(settings, "BACKTESTS_DIR", tmp_path / "bt")
+    monkeypatch.setattr(settings, "CACHE_DIR", tmp_path / "cache")
     monkeypatch.setattr(settings, "API_TOKEN", "testtoken")
+    settings.CACHE_DIR.mkdir(parents=True, exist_ok=True)
     db.init_db()
     yield
 
@@ -83,3 +85,49 @@ def test_routes_registered(client):
               "/api/backtest", "/api/backtests/{bid}", "/ws/backtest",
               "/api/deployments/{did}/start"]:
         assert p in paths, f"路由未注册: {p}"
+
+
+def test_config_cache_counts_all_cache_files(client):
+    from core.utils.config import settings
+    (settings.CACHE_DIR / "BTC_USDT_SWAP_1H.parquet").write_bytes(b"parquet-a")
+    (settings.CACHE_DIR / "ETH_USDT_SWAP_4H.parquet").write_bytes(b"parquet-b")
+    (settings.CACHE_DIR / "swap_instruments_USDT.json").write_text('["BTC-USDT-SWAP"]', encoding="utf-8")
+
+    r = client.get("/api/config")
+    assert r.status_code == 200
+    cache = r.json()["cache"]
+    assert cache["count"] == 3
+    assert cache["parquet_count"] == 2
+    assert cache["json_count"] == 1
+    assert cache["size_bytes"] == (
+        cache["parquet_size_bytes"] + cache["json_size_bytes"]
+    )
+
+
+def test_clear_cache_route_clears_all_cache_types(client):
+    from core.utils.config import settings
+    (settings.CACHE_DIR / "BTC_USDT_SWAP_1H.parquet").write_bytes(b"parquet-a")
+    (settings.CACHE_DIR / "swap_instruments_USDT.json").write_text('["BTC-USDT-SWAP"]', encoding="utf-8")
+
+    r = client.post("/api/cache/clear", headers=H)
+    assert r.status_code == 200
+    assert r.json()["cleared"] == 2
+    assert list(settings.CACHE_DIR.iterdir()) == []
+
+
+def test_clear_cache_route_supports_symbol_bar_scoping(client):
+    from core.utils.config import settings
+    (settings.CACHE_DIR / "BTC_USDT_SWAP_1H.parquet").write_bytes(b"btc-1h")
+    (settings.CACHE_DIR / "BTC_USDT_SWAP_4H.parquet").write_bytes(b"btc-4h")
+    (settings.CACHE_DIR / "ETH_USDT_SWAP_1H.parquet").write_bytes(b"eth-1h")
+    (settings.CACHE_DIR / "swap_instruments_USDT.json").write_text('["BTC-USDT-SWAP"]', encoding="utf-8")
+
+    r = client.post("/api/cache/clear?symbol=BTC-USDT-SWAP&bar=1H&include_instruments=false", headers=H)
+    assert r.status_code == 200
+    assert r.json()["cleared"] == 1
+    remaining = sorted(p.name for p in settings.CACHE_DIR.iterdir())
+    assert remaining == [
+        "BTC_USDT_SWAP_4H.parquet",
+        "ETH_USDT_SWAP_1H.parquet",
+        "swap_instruments_USDT.json",
+    ]

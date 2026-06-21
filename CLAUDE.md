@@ -54,7 +54,7 @@ python scripts/trader_daemon.py --job runtime/jobs/<job_id>.json
 
 - **符号/周期格式**（`core/data/symbols.py`）：内部统一用 **OKX 格式**——合约 symbol `BTC-USDT-SWAP`、现货 `BTC-USDT`；bar 用大写后缀 `1H`/`4H`/`1D`（OKX REST 要求）。只有调 ccxt（实盘下单/查持仓）时才转成小写 `1h`/`4h`/`1d`，用 `okx_to_ccxt()` / `okx_to_ccxt_tf()`。
 - **路径不依赖 cwd**：所有路径以 `core/utils/config.py` 推导出的项目根 `ROOT` 为基准（该文件位于 `core/utils/`，上溯两级）。入口脚本（`api_server.py`、`trader_daemon.py`）都先 `sys.path.insert(0, ROOT)`。
-- **运行时目录**：`cache/`（parquet K 线缓存）、`runtime/jobs|state|logs/`（实盘作业）均已被 gitignore（保留 `.gitkeep`）。
+- **运行时目录**：`cache/`（K 线 parquet 缓存 + 交易对列表 JSON 缓存）、`runtime/jobs|state|logs/`（实盘作业）均已被 gitignore（保留 `.gitkeep`）。
 
 ## 策略注册表与「保存即生效」
 

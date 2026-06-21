@@ -73,7 +73,7 @@ web/      React + Vite + Tailwind 前端（薄壳，调 /api）
 api/      FastAPI REST 层（监控 GET 公开 / 控制 POST 需 token）
 core/     纯 Python 业务逻辑（可独立测试、被 API 调用）
   strategy/   Strategy 基类、注册表、Ensemble、Portfolio、内置策略、多币
-  data/       OKX K线拉取 + parquet 缓存 + symbol/周期转换
+  data/       OKX K线拉取 + K线 parquet/交易对 JSON 缓存 + symbol/周期转换
   backtest/   逐K线 mark-to-market 引擎 + 指标 + 网格搜索
   live/       ccxt 交易所封装 + 单轮执行 + job/state 运行时
 scripts/  trader_daemon.py（独立后台进程入口）
