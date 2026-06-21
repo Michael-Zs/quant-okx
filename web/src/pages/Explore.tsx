@@ -4,20 +4,17 @@ import { api, openBacktestWS } from '../api/client'
 import type { TemplateInfo, BacktestMetrics, NodeSpec, ParamSchema } from '../api/types'
 import { Card, CardHeader, Button, Slider, Select, Input, Field } from '../components/ui'
 import { EquityChart, MetricsGrid } from '../components/charts'
-import { SymbolPicker, MultiSymbolPicker } from '../components/SymbolPicker'
+import { SymbolPicker } from '../components/SymbolPicker'
 import { SpecModal } from '../components/SpecModal'
 import { useStore } from '../store/useStore'
 
 const BARS = ['1H', '4H', '1D']
-const DEFAULT_UNIVERSE = ['BTC-USDT-SWAP', 'ETH-USDT-SWAP', 'SOL-USDT-SWAP']
 
 export default function Explore() {
   const [templates, setTemplates] = useState<TemplateInfo[]>([])
-  const [filter, setFilter] = useState<'single' | 'multi'>('single')
   const [sel, setSel] = useState('')
   const [params, setParams] = useState<Record<string, number | string>>({})
   const [symbol, setSymbol] = useState('BTC-USDT-SWAP')
-  const [universe, setUniverse] = useState<string[]>(DEFAULT_UNIVERSE)
   const [instruments, setInstruments] = useState<string[]>([
     'BTC-USDT-SWAP', 'ETH-USDT-SWAP', 'SOL-USDT-SWAP', 'DOGE-USDT-SWAP', 'XRP-USDT-SWAP',
   ])
@@ -58,23 +55,19 @@ export default function Explore() {
     return () => ws.close()
   }, [])
 
-  const isMulti = tpl?.strategy_kind === 'multi'
-  const btSymbols = isMulti ? universe : [symbol]
-
-  // 参数/品种/universe/invert 变化时发回测（debounce 300ms）
+  // 参数/品种/invert 变化时发回测（debounce 300ms）
   useEffect(() => {
     const ws = wsRef.current
     if (!tpl || !ws || ws.readyState !== WebSocket.OPEN) return
-    if (isMulti && universe.length < 2) return   // 多币截面至少需要 2 个币种
     const t = setTimeout(() => {
       const spec: NodeSpec = {
         node_type: 'leaf', name: tpl.name, template_name: tpl.name,
         strategy_kind: tpl.strategy_kind, params, invert,
       }
-      ws.send(JSON.stringify({ node_spec: spec, symbols: btSymbols, bar, days, initial_capital: 10000 }))
+      ws.send(JSON.stringify({ node_spec: spec, symbols: [symbol], bar, days, initial_capital: 10000 }))
     }, 300)
     return () => clearTimeout(t)
-  }, [tpl, params, symbol, universe, bar, days, invert])
+  }, [tpl, params, symbol, bar, days, invert])
 
   async function save() {
     if (!tpl || !saveName) return
@@ -83,7 +76,7 @@ export default function Explore() {
         name: saveName, template_name: tpl.name,
         strategy_kind: tpl.strategy_kind, params,
         bar, days,
-        symbols: isMulti ? universe : [symbol],
+        symbols: [symbol],
         invert,
       })
       await refreshStrategies()
@@ -94,23 +87,15 @@ export default function Explore() {
     }
   }
 
-  const visible = templates.filter((t) => t.strategy_kind === filter)
+  const visible = templates.filter((t) => t.strategy_kind === 'single')
 
   return (
     <div className="flex h-full">
       {/* 左：模板库 */}
       <div className="w-72 shrink-0 border-r border-line p-4 overflow-auto">
-        <div className="flex gap-1 mb-2 p-1 bg-black/20 rounded-sm">
-          {(['single', 'multi'] as const).map((k) => (
-            <button key={k} onClick={() => setFilter(k)}
-              className={`flex-1 py-1.5 rounded text-xs font-medium transition-colors ${filter === k ? 'bg-card-strong text-accent' : 'text-dim'}`}>
-              {k === 'single' ? '单币策略' : '多币策略'}
-            </button>
-          ))}
-        </div>
         <button onClick={() => setSpecOpen(true)}
           className="w-full mb-3 flex items-center justify-center gap-1.5 py-1.5 rounded text-xs font-medium border border-accent/30 text-accent hover:bg-accent/10 transition-colors">
-          <Bot size={14} /> AI 策略开发规范（{filter === 'single' ? '单币' : '多币'}）
+          <Bot size={14} /> AI 策略开发规范（单币）
         </button>
         <div className="space-y-1">
           {visible.map((t) => (
@@ -129,15 +114,9 @@ export default function Explore() {
           <>
             <div className="text-base font-semibold">{tpl.display_name}</div>
             <div className="text-xs text-dim mb-4">{tpl.description}</div>
-            {isMulti ? (
-              <Field label="币种池 universe" hint="多币策略在这些币种间做截面择优/轮动，至少 2 个">
-                <MultiSymbolPicker value={universe} onChange={setUniverse} instruments={instruments} min={2} />
-              </Field>
-            ) : (
-              <Field label="品种（合约）">
-                <SymbolPicker value={symbol} onChange={setSymbol} instruments={instruments} />
-              </Field>
-            )}
+            <Field label="品种（合约）">
+              <SymbolPicker value={symbol} onChange={setSymbol} instruments={instruments} />
+            </Field>
             <div className="grid grid-cols-2 gap-2 mt-3">
               <Field label="周期">
                 <Select value={bar} onChange={setBar} options={BARS.map((b) => ({ value: b, label: b }))} className="w-full" />
@@ -176,13 +155,13 @@ export default function Explore() {
       <div className="flex-1 p-4 overflow-auto">
         <Card>
           <CardHeader title="权益曲线"
-            subtitle={tpl ? `${tpl.display_name} · ${btSymbols.join(', ')} ${bar} · ${days}天${invert ? ' · 反向' : ''}` : ''} />
+            subtitle={tpl ? `${tpl.display_name} · ${symbol} ${bar} · ${days}天${invert ? ' · 反向' : ''}` : ''} />
           <div className="px-4 pb-4"><EquityChart equity={equity} /></div>
         </Card>
         <div className="mt-4"><MetricsGrid m={metrics} /></div>
       </div>
 
-      {specOpen && <SpecModal kind={filter} onClose={() => setSpecOpen(false)} />}
+      {specOpen && <SpecModal kind="single" onClose={() => setSpecOpen(false)} />}
     </div>
   )
 }

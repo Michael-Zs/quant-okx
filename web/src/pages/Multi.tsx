@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Activity, Play, RefreshCcw } from 'lucide-react'
+import { Activity, Play, RefreshCcw, Save, Bot } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { api } from '../api/client'
 import type { TemplateInfo, MultiReport, ParamSchema } from '../api/types'
 import { Card, CardHeader, Button, Input, Field, Slider, Select, Badge, Toggle } from '../components/ui'
 import { MultiSymbolPicker } from '../components/SymbolPicker'
+import { SpecModal } from '../components/SpecModal'
+import { useStore } from '../store/useStore'
 import { pct, fmt } from '../lib/utils'
 
 const DEFAULT_UNIVERSE = ['BTC-USDT-SWAP', 'ETH-USDT-SWAP', 'SOL-USDT-SWAP']
@@ -23,6 +25,10 @@ export default function Multi() {
   const [loading, setLoading] = useState(false)
   const [report, setReport] = useState<MultiReport | null>(null)
   const [err, setErr] = useState('')
+  const [saveName, setSaveName] = useState('')
+  const [msg, setMsg] = useState('')
+  const [specOpen, setSpecOpen] = useState(false)
+  const { refreshStrategies } = useStore()
 
   useEffect(() => {
     api.templates().then((r) => {
@@ -55,6 +61,20 @@ export default function Multi() {
     finally { setLoading(false) }
   }
 
+  async function save() {
+    if (!tpl || !saveName) return
+    try {
+      await api.createStrategy({
+        name: saveName, template_name: tpl.name,
+        strategy_kind: tpl.strategy_kind, params,
+        bar, days, symbols: universe, invert,
+      })
+      await refreshStrategies()
+      setMsg(`✓ 已保存${isMulti ? '多币' : '批量'}策略「${saveName}」`)
+      setSaveName('')
+    } catch (e) { setMsg((e as Error).message) }
+  }
+
   const isMulti = tpl?.strategy_kind === 'multi'
   const eqData = report?.equity
   const overlayData = (() => {
@@ -70,11 +90,17 @@ export default function Multi() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 pt-5 pb-3 border-b border-line">
-        <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
-          <Activity size={20} className="text-accent" /> 多币策略
-        </h1>
-        <p className="text-xs text-dim mt-0.5">跨币种择优（动量轮动 / 相对强弱）+ 单币策略多币批量运行 · 资金槽模型。</p>
+      <div className="px-6 pt-5 pb-3 border-b border-line flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
+            <Activity size={20} className="text-accent" /> 多币策略
+          </h1>
+          <p className="text-xs text-dim mt-0.5">跨币种择优（动量轮动 / 相对强弱）+ 单币策略多币批量运行 · 资金槽模型。</p>
+        </div>
+        <button onClick={() => setSpecOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium border border-accent/30 text-accent hover:bg-accent/10 transition-colors shrink-0">
+          <Bot size={14} /> AI 规范（多币）
+        </button>
       </div>
 
       <div className="flex flex-1 min-h-0">
@@ -129,6 +155,14 @@ export default function Multi() {
             <Play size={15} className="inline mr-1.5" />{loading ? '回测中…' : '组合回测'}
           </Button>
           {err && <div className="text-xs text-down mt-2 break-all">{err}</div>}
+
+          <div className="h-px bg-line my-4" />
+          <div className="text-xs text-dim mb-2">保存为策略实例</div>
+          <Input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="命名（如：动量轮动_v1）…" className="w-full mb-2" />
+          <Button variant="secondary" className="w-full" onClick={save} disabled={!saveName || !tpl}>
+            <Save size={15} className="inline mr-1.5" />保存策略
+          </Button>
+          {msg && <div className="text-xs text-accent mt-2 break-all">{msg}</div>}
         </div>
 
         {/* 右：结果 */}
@@ -205,6 +239,7 @@ export default function Multi() {
           )}
         </div>
       </div>
+      {specOpen && <SpecModal kind="multi" onClose={() => setSpecOpen(false)} />}
     </div>
   )
 }

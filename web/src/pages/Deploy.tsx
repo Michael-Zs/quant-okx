@@ -133,7 +133,8 @@ export default function Deploy() {
           <Field label="资金"><Input type="number" value={initialCapital} onChange={(e) => setInitialCapital(+e.target.value)} className="w-full" /></Field>
         </div>
         <div className="h-px bg-line my-4" />
-        <div className="text-xs text-dim mb-2">策略组占比（资金层分配）</div>
+        <div className="text-xs text-dim mb-1">策略组占比（资金层分配）</div>
+        <div className="text-[0.7rem] text-dim/70 mb-2">滑块调资金占比；开关=「反向」，反转该组信号方向（1↔-1），可用于翻转亏损策略或对冲配置</div>
         <div className="space-y-2">
           {Object.entries(sel).map(([gid, v]) => {
             const g = groups.find((x) => x.id === gid)
@@ -146,7 +147,9 @@ export default function Deploy() {
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-dim w-10 tnum">{((v.weight / totalW) * 100).toFixed(0)}%</span>
                   <Slider value={v.weight} min={0} max={5} step={0.1} onChange={(w) => updateSel(gid, { weight: w })} className="flex-1" />
-                  <Toggle checked={v.invert} onChange={(inv) => updateSel(gid, { invert: inv })} />
+                  <span title="反向：反转该策略组的信号方向（做多↔做空）">
+                    <Toggle checked={v.invert} onChange={(inv) => updateSel(gid, { invert: inv })} label="反向" />
+                  </span>
                 </div>
               </div>
             )
