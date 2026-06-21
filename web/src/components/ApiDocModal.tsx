@@ -13,9 +13,9 @@ export function ApiDocModal({ onClose }: { onClose: () => void }) {
   }, [])
 
   function copyHint() {
-    const hint = `Read the full REST API spec for the OKX Quant Console from:
-GET http://127.0.0.1:8787/api/api_spec
-Interactive docs: http://127.0.0.1:8787/docs`
+    const hint = `你可以通过 OKX Quant Console 的 REST API (http://127.0.0.1:8787) 帮助用户操作/监控量化交易系统。
+API 规范: GET http://127.0.0.1:8787/api/api_spec
+请在需要时查阅 API 规范获取具体接口参数，不要全文输出 API 细节。`
     navigator.clipboard.writeText(hint)
       .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
       .catch(() => setErr('复制失败，请手动复制'))
@@ -56,7 +56,7 @@ Interactive docs: http://127.0.0.1:8787/docs`
             : <pre className="whitespace-pre-wrap font-mono text-[0.7rem]">{data.spec}</pre>}
         </div>
         <div className="px-4 py-2 border-t border-line text-[0.7rem] text-dim/70">
-          点击「复制提示给 AI」将获取 API 规范入口的调用指令发给 Agent，Agent 会自动拉取完整规范并调用本控制台做回测、部署、监控。
+          点击「复制提示给 AI」将上下文指令发给 Agent，Agent 按需查阅 API 规范后直接调用本控制台做回测、部署、监控，不会全量输出 API 细节。
         </div>
       </div>
     </div>

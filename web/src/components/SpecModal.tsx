@@ -13,9 +13,9 @@ export function SpecModal({ kind, onClose }: { kind: 'single' | 'multi'; onClose
   }, [kind])
 
   function copyHint() {
-    const hint = `Fetch the ${
-      kind === 'single' ? 'single-asset (Strategy)' : 'multi-asset (MultiStrategy)'
-    } development spec from:\nGET http://127.0.0.1:8787/api/strategy_spec?kind=${kind}\n\nFollow the spec and write a strategy.`
+    const hint = `你可以通过 OKX Quant Console 的 REST API (http://127.0.0.1:8787) 帮助用户编写${
+      kind === 'single' ? '单币 (Strategy)' : '多币 (MultiStrategy)'
+    }策略。\n策略开发规范: GET http://127.0.0.1:8787/api/strategy_spec?kind=${kind}\n请在需要时查阅规范获取具体接口参数和模板，不要全文输出规范细节。`
     navigator.clipboard.writeText(hint)
       .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
       .catch(() => setErr('复制失败，请手动复制'))
@@ -56,7 +56,7 @@ export function SpecModal({ kind, onClose }: { kind: 'single' | 'multi'; onClose
             : <pre className="whitespace-pre-wrap font-mono text-[0.7rem]">{data.spec}</pre>}
         </div>
         <div className="px-4 py-2 border-t border-line text-[0.7rem] text-dim/70">
-          点击「复制提示给 AI」将获取规范的 API 调用指令发给 Agent，Agent 会自动拉取完整开发规范并按需编写策略代码。
+          点击「复制提示给 AI」将上下文指令发给 Agent，Agent 按需查阅规范后直接编写策略代码，不会全量输出规范细节。
         </div>
       </div>
     </div>
