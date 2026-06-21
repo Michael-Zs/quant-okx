@@ -4,6 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pytest
+import pandas as pd
 
 
 @pytest.fixture(autouse=True)
@@ -131,3 +132,47 @@ def test_clear_cache_route_supports_symbol_bar_scoping(client):
         "ETH_USDT_SWAP_1H.parquet",
         "swap_instruments_USDT.json",
     ]
+
+
+def test_backtest_detail_supports_max_points_sampling(client):
+    from core.persist import repositories as R
+
+    eq = pd.DataFrame({
+        "ts": pd.date_range("2026-01-01", periods=10, freq="h"),
+        "equity": [10000 + i * 10 for i in range(10)],
+    })
+    bid = R.save_backtest(
+        node_kind="adhoc",
+        ref_id=None,
+        spec={"node_type": "leaf"},
+        metrics={"total_return": 0.1},
+        cfg={"bar": "1H"},
+        symbol="BTC-USDT-SWAP",
+        bar="1H",
+        days=10,
+        equity_df=eq,
+    )
+
+    r = client.get(f"/api/backtests/{bid}?with_equity=true&max_points=4")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["equity"]["sampled"] is True
+    assert data["equity"]["total_points"] == 10
+    assert data["equity"]["returned_points"] == 4
+    assert data["equity"]["ts"][0].startswith("2026-01-01")
+    assert data["equity"]["equity"][0] == 10000.0
+    assert data["equity"]["equity"][-1] == 10090.0
+
+
+def test_sampling_helper_keeps_first_and_last_points():
+    from api.response_sampling import sample_curve
+
+    df = pd.DataFrame({
+        "ts": pd.date_range("2026-01-01", periods=9, freq="h"),
+        "equity": [float(i) for i in range(9)],
+    })
+    sampled = sample_curve(df, "equity", 4)
+    assert sampled is not None
+    assert sampled["returned_points"] == 4
+    assert sampled["equity"][0] == 0.0
+    assert sampled["equity"][-1] == 8.0

@@ -23,6 +23,7 @@ from core.utils.config import settings
 from api import verify_token
 from api.schemas import BacktestRequest, DeploymentCreate, DeploymentUpdate
 from api.routes_monitor import _clean
+from api.response_sampling import sample_curve, sample_holdings
 
 router = APIRouter(prefix="/api", dependencies=[Depends(verify_token)])
 
@@ -232,6 +233,8 @@ class MultiBacktestRequest(BaseModel):
     position_ratio: float = 0.1
     fee_rate: float = 0.0005
     slippage: float = 0.0005
+    max_points: Optional[int] = None
+    response_mode: str = "full"
 
 
 @router.post("/multi_backtest")
@@ -240,6 +243,8 @@ def multi_backtest(req: MultiBacktestRequest):
     StrategyRegistry.discover_all()
     if not req.symbols:
         raise HTTPException(400, "symbols 不能为空")
+    if req.response_mode not in {"full", "compact"}:
+        raise HTTPException(400, "response_mode 仅支持 full 或 compact")
     try:
         data = {sym: get_data(sym, req.bar, req.days) for sym in req.symbols}
         ctx = NodeContext(data=data, primary_symbol=req.symbols[0], bar=req.bar)
@@ -254,25 +259,23 @@ def multi_backtest(req: MultiBacktestRequest):
     except Exception as e:
         raise HTTPException(400, str(e))
 
-    ts = [str(t) for t in rep.equity_curve["ts"].tolist()]
+    compact = req.response_mode == "compact"
     per_symbol = []
     for sym, w, r in rep.per_symbol:
-        per_symbol.append({
+        item = {
             "symbol": sym, "weight": w, "metrics": _clean(r.metrics),
-            "equity": [float(x) for x in r.equity_curve["equity"].tolist()],
-        })
-    hold = rep.holdings
-    holding_symbols = [c for c in hold.columns if c != "ts"]
+        }
+        if not compact:
+            item["equity"] = [float(x) for x in r.equity_curve["equity"].tolist()]
+        per_symbol.append(item)
+
     return {
         "metrics": _clean(rep.metrics),
-        "equity": ts and {"ts": ts, "equity": [float(x) for x in rep.equity_curve["equity"].tolist()]},
+        "equity": sample_curve(rep.equity_curve, "equity", req.max_points),
         "per_symbol": per_symbol,
-        "holdings": {
-            "ts": [str(t) for t in hold["ts"].tolist()],
-            "symbols": holding_symbols,
-            "matrix": [[int(v) for v in hold[s].tolist()] for s in holding_symbols],
-        },
+        "holdings": sample_holdings(rep.holdings, req.max_points),
         "initial_capital": rep.initial_capital,
+        "response_mode": req.response_mode,
     }
 
 

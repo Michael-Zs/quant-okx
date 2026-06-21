@@ -129,14 +129,29 @@ export interface PerSymbolReport {
   symbol: string
   weight: number
   metrics: BacktestMetrics
+  equity?: number[]
+}
+export interface SampledSeries {
+  ts: string[]
   equity: number[]
+  sampled?: boolean
+  total_points?: number
+  returned_points?: number
 }
 export interface MultiReport {
   metrics: BacktestMetrics
-  equity: { ts: string[]; equity: number[] }
+  equity: SampledSeries
   per_symbol: PerSymbolReport[]
-  holdings: { ts: string[]; symbols: string[]; matrix: number[][] }
+  holdings: {
+    ts: string[]
+    symbols: string[]
+    matrix: number[][]
+    sampled?: boolean
+    total_points?: number
+    returned_points?: number
+  }
   initial_capital: number
+  response_mode?: 'full' | 'compact'
 }
 
 // ---- 设置 ----
