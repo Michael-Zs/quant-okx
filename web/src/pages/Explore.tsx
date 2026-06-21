@@ -79,8 +79,13 @@ export default function Explore() {
   async function save() {
     if (!tpl || !saveName) return
     try {
-      await api.createStrategy({ name: saveName, template_name: tpl.name,
-                                 strategy_kind: tpl.strategy_kind, params })
+      await api.createStrategy({
+        name: saveName, template_name: tpl.name,
+        strategy_kind: tpl.strategy_kind, params,
+        bar, days,
+        symbols: isMulti ? universe : [symbol],
+        invert,
+      })
       await refreshStrategies()
       setMsg(`✓ 已保存单策略「${saveName}」`)
       setSaveName('')

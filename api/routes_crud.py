@@ -31,7 +31,8 @@ def create_strategy(req: StrategyCreate):
         raise HTTPException(409, f"策略名已存在: {req.name}")
     sid = R.create_strategy(name=req.name, template_name=req.template_name,
                             strategy_kind=req.strategy_kind, params=req.params,
-                            side_mode=req.side_mode, description=req.description)
+                            side_mode=req.side_mode, description=req.description,
+                            bar=req.bar, days=req.days, symbols=req.symbols, invert=req.invert)
     return R.get_strategy(sid)
 
 

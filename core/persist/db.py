@@ -24,6 +24,10 @@ CREATE TABLE IF NOT EXISTS strategies (
     params_json   TEXT NOT NULL,
     side_mode     TEXT,
     description   TEXT,
+    bar           TEXT,
+    days          INTEGER,
+    symbols_json  TEXT NOT NULL DEFAULT '[]',
+    invert        INTEGER NOT NULL DEFAULT 0,
     created_at    TEXT,
     updated_at    TEXT
 );
@@ -96,6 +100,11 @@ def init_db():
         conn.execute("PRAGMA foreign_keys=ON")
         conn.executescript(SCHEMA)
         _ensure_column(conn, "deployments", "symbols_json", "TEXT NOT NULL DEFAULT '[]'")
+        # strategies 表补列：bar/days/symbols/invert（随 Explore 保存需求加入）
+        _ensure_column(conn, "strategies", "bar", "TEXT")
+        _ensure_column(conn, "strategies", "days", "INTEGER")
+        _ensure_column(conn, "strategies", "symbols_json", "TEXT NOT NULL DEFAULT '[]'")
+        _ensure_column(conn, "strategies", "invert", "INTEGER NOT NULL DEFAULT 0")
         conn.commit()
     finally:
         conn.close()

@@ -5,8 +5,9 @@ import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Trash2, Plus, Save } from 'lucide-react'
 import { api, openBacktestWS } from '../api/client'
 import type { StrategyInstance, NodeSpec, ChildRefSpec, BacktestMetrics } from '../api/types'
-import { Card, CardHeader, Button, Slider, Toggle, Select, Input } from '../components/ui'
+import { Card, CardHeader, Button, Slider, Toggle, Select, Input, Field } from '../components/ui'
 import { EquityChart, MetricsGrid } from '../components/charts'
+import { MultiSymbolPicker } from '../components/SymbolPicker'
 import { useStore } from '../store/useStore'
 import { uid } from '../lib/utils'
 
@@ -22,10 +23,16 @@ export default function Compose() {
   const [msg, setMsg] = useState('')
   const [metrics, setMetrics] = useState<BacktestMetrics | null>(null)
   const [equity, setEquity] = useState<{ ts: string[]; equity: number[] } | null>(null)
+  // 回测预览参数（此前硬编码为 1H/180天/BTC）
+  const [bar, setBar] = useState('1H')
+  const [days, setDays] = useState(180)
+  const [symbols, setSymbols] = useState<string[]>(['BTC-USDT-SWAP'])
+  const [instruments, setInstruments] = useState<string[]>(['BTC-USDT-SWAP','ETH-USDT-SWAP','SOL-USDT-SWAP'])
   const wsRef = useRef<WebSocket | null>(null)
   const { refreshGroups } = useStore()
 
   useEffect(() => { api.listStrategies().then((r) => setStrategies(r.strategies)) }, [])
+  useEffect(() => { api.instruments().then((r) => setInstruments(r.instruments)).catch(() => {}) }, [])
   useEffect(() => {
     const ws = openBacktestWS((d) => {
       if (d.metrics) { setMetrics(d.metrics as BacktestMetrics); setEquity(d.equity as { ts: string[]; equity: number[] }) }
@@ -45,17 +52,23 @@ export default function Compose() {
   // WS 实时预览（debounce）
   useEffect(() => {
     const ws = wsRef.current
-    if (!ws || ws.readyState !== WebSocket.OPEN || children.length === 0) return
+    if (!ws || ws.readyState !== WebSocket.OPEN || children.length === 0 || symbols.length === 0) return
     const t = setTimeout(() => {
-      ws.send(JSON.stringify({ node_spec: buildSpec(), symbol: 'BTC-USDT-SWAP', symbols: ['BTC-USDT-SWAP'], bar: '1H', days: 180, initial_capital: 10000 }))
+      ws.send(JSON.stringify({ node_spec: buildSpec(), symbols, bar, days, initial_capital: 10000 }))
     }, 350)
     return () => clearTimeout(t)
-  }, [children, groupType, mode])
+  }, [children, groupType, mode, bar, days, symbols])
 
   function addFromStrategy(s: StrategyInstance) {
     const node: NodeSpec = { node_type: 'leaf', name: s.name, template_name: s.template_name,
-                             strategy_kind: s.strategy_kind, params: s.params, invert: false }
-    setChildren((c) => [...c, { _id: uid(), node, weight: 1, invert: false }])
+                             strategy_kind: s.strategy_kind, params: s.params, invert: s.invert }
+    setChildren((c) => [...c, { _id: uid(), node, weight: 1, invert: s.invert }])
+    // 首个子策略带入其保存的 bar/days/symbols（若有），避免每次都要手动重设
+    if (children.length === 0) {
+      if (s.bar) setBar(s.bar)
+      if (s.days) setDays(s.days)
+      if (s.symbols && s.symbols.length) setSymbols(s.symbols)
+    }
   }
 
   function onDragEnd(e: DragEndEvent) {
@@ -140,8 +153,25 @@ export default function Compose() {
 
         {/* 右：组合回测预览 */}
         <div className="w-96 shrink-0 border-l border-line p-4 overflow-auto">
+          <Card className="mb-4">
+            <CardHeader title="回测参数" subtitle="预览用的行情上下文" />
+            <div className="px-4 pb-4 space-y-3">
+              <Field label="品种（单币 1 个；多币策略可选多个作 universe）">
+                <MultiSymbolPicker value={symbols} onChange={setSymbols} instruments={instruments} min={1} />
+              </Field>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="周期">
+                  <Select value={bar} onChange={setBar} options={['1H','4H','1D'].map((b) => ({ value: b, label: b }))} className="w-full" />
+                </Field>
+                <Field label="回测天数">
+                  <Input type="number" value={days} onChange={(e) => setDays(+e.target.value)} className="w-full" />
+                </Field>
+              </div>
+            </div>
+          </Card>
           <Card>
-            <CardHeader title="组合回测预览" subtitle="BTC-USDT-SWAP · 1H · 180天" />
+            <CardHeader title="组合回测预览"
+              subtitle={`${symbols.join(', ')} · ${bar} · ${days}天`} />
             <div className="px-4 pb-4"><EquityChart equity={equity} /></div>
           </Card>
           <div className="mt-4"><MetricsGrid m={metrics} /></div>

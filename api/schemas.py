@@ -15,6 +15,10 @@ class StrategyCreate(BaseModel):
     params: dict = {}
     side_mode: str = "long_short"
     description: str = ""
+    bar: str | None = None              # 绑定的周期（保存时记录，Compose/部署复用）
+    days: int | None = None            # 回测天数
+    symbols: list[str] = []            # 品种（单币 1 个 / 多币 universe）
+    invert: bool = False               # 信号反向
 
 
 class StrategyUpdate(BaseModel):
@@ -22,6 +26,10 @@ class StrategyUpdate(BaseModel):
     params: dict | None = None
     side_mode: str | None = None
     description: str | None = None
+    bar: str | None = None
+    days: int | None = None
+    symbols: list[str] | None = None
+    invert: bool | None = None
 
 
 class GroupCreate(BaseModel):

@@ -31,7 +31,7 @@ export const api = {
 
   // 策略实例
   listStrategies: () => req<{ strategies: StrategyInstance[] }>('/strategies'),
-  createStrategy: (data: { name: string; template_name: string; strategy_kind: string; params: Record<string, number | string>; description?: string }) =>
+  createStrategy: (data: { name: string; template_name: string; strategy_kind: string; params: Record<string, number | string>; description?: string; bar?: string | null; days?: number | null; symbols?: string[]; invert?: boolean }) =>
     req<StrategyInstance>('/strategies', { method: 'POST', body: JSON.stringify(data) }),
   deleteStrategy: (id: string) => req<{ id: string; deleted: boolean }>(`/strategies/${id}`, { method: 'DELETE' }),
 

@@ -47,29 +47,38 @@ def find_strategy_by_name(name: str) -> dict | None:
 
 
 def create_strategy(*, name, template_name, strategy_kind, params,
-                    side_mode="long_short", description="") -> str:
+                    side_mode="long_short", description="",
+                    bar=None, days=None, symbols=None, invert=False) -> str:
     sid = _new_id("str")
     now = _now()
+    symbols = symbols or []
     with get_conn() as conn:
         conn.execute(
             "INSERT INTO strategies "
-            "(id,name,template_name,strategy_kind,params_json,side_mode,description,created_at,updated_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?)",
+            "(id,name,template_name,strategy_kind,params_json,side_mode,description,"
+            " bar,days,symbols_json,invert,created_at,updated_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (sid, name, template_name, strategy_kind, json.dumps(params),
-             side_mode, description, now, now))
+             side_mode, description, bar, days, json.dumps(symbols), 1 if invert else 0, now, now))
         conn.commit()
     return sid
 
 
 def update_strategy(sid: str, **fields) -> bool:
-    allowed = {"name", "template_name", "strategy_kind", "params", "side_mode", "description"}
+    allowed = {"name", "template_name", "strategy_kind", "params", "side_mode", "description",
+               "bar", "days", "symbols", "invert"}
     sets, args = [], []
     for k, v in fields.items():
         if k not in allowed:
             continue
-        col = "params_json" if k == "params" else k
-        sets.append(f"{col}=?")
-        args.append(json.dumps(v) if k == "params" else v)
+        if k == "params":
+            sets.append("params_json=?"); args.append(json.dumps(v))
+        elif k == "symbols":
+            sets.append("symbols_json=?"); args.append(json.dumps(v))
+        elif k == "invert":
+            sets.append("invert=?"); args.append(1 if v else 0)
+        else:
+            sets.append(f"{k}=?"); args.append(v)
     if not sets:
         return False
     sets.append("updated_at=?")
@@ -91,6 +100,9 @@ def _decode_strategy(r) -> dict:
     return {"id": r["id"], "name": r["name"], "template_name": r["template_name"],
             "strategy_kind": r["strategy_kind"], "params": json.loads(r["params_json"]),
             "side_mode": r["side_mode"], "description": r["description"],
+            "bar": r["bar"], "days": r["days"],
+            "symbols": json.loads(r["symbols_json"]) if r["symbols_json"] else [],
+            "invert": bool(r["invert"]) if r["invert"] is not None else False,
             "created_at": r["created_at"], "updated_at": r["updated_at"]}
 
 

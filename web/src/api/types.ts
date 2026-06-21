@@ -32,6 +32,10 @@ export interface StrategyInstance {
   params: Record<string, number | string>
   side_mode: string
   description: string
+  bar: string | null
+  days: number | null
+  symbols: string[]
+  invert: boolean
   created_at: string
   updated_at: string
 }
