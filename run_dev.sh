@@ -24,12 +24,26 @@ kill_port() {
 kill_port "$API_PORT"
 kill_port "$WEB_PORT"
 
+# 优先用 python3（macOS 通常只有 python3），否则回退 python
+PYTHON_BIN=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || echo "")
+if [ -z "$PYTHON_BIN" ]; then
+  echo "✗ 未找到 python 或 python3，请先安装 Python 3"
+  exit 1
+fi
+
 echo "▶ 启动后端 API (:$API_PORT)..."
-python api_server.py &
+$PYTHON_BIN api_server.py > >(while IFS= read -r line; do echo "[api] $line"; done) 2>&1 &
 API_PID=$!
 
+# 短暂等待看后端是否立崩
+sleep 1
+if ! kill -0 "$API_PID" 2>/dev/null; then
+  echo "✗ 后端启动失败（进程已退出），请检查上方 [api] 前缀的错误输出"
+  exit 1
+fi
+
 echo "▶ 启动前端 (:$WEB_PORT)..."
-(cd web && npm run dev) &
+(cd web && npm run dev 2> >(while IFS= read -r line; do echo "[vite] $line"; done) 1>&2) &
 WEB_PID=$!
 
 cleanup() {
