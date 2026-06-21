@@ -20,6 +20,10 @@ runtime/console.db
 !runtime/state/.gitkeep
 !runtime/logs/.gitkeep
 
+# 用户策略目录（本地生成的 .py 不进版本库，保留 README 说明）
+strategies/*
+!strategies/README.md
+
 # 杂项
 *.csv
 backtest_result.png
