@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
-import { Settings as Cog, Save, Trash2, RefreshCw, KeyRound, Database, Server } from 'lucide-react'
+import { Settings as Cog, Save, Trash2, RefreshCw, KeyRound, Database, Server, Terminal } from 'lucide-react'
 import { api } from '../api/client'
 import type { ConfigInfo } from '../api/types'
 import { Card, CardHeader, Button, Input, Field, Badge } from '../components/ui'
+import { ApiDocModal } from '../components/ApiDocModal'
 
 export default function Settings() {
   const [cfg, setCfg] = useState<ConfigInfo | null>(null)
   const [k1, setK1] = useState(''); const [k2, setK2] = useState(''); const [k3, setK3] = useState('')
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [loading, setLoading] = useState(false)
+  const [apiDocOpen, setApiDocOpen] = useState(false)
 
   async function refresh() {
     const c = await api.config(); setCfg(c)
@@ -61,13 +63,17 @@ export default function Settings() {
       {/* REST API 信息 */}
       <Card className="mb-5">
         <CardHeader title={<span className="flex items-center gap-2"><Server size={15} /> REST API</span>}
-          subtitle="控制类接口（回测 / 启停实盘 / 查余额）需在请求头带 X-API-Token。" />
+          subtitle="控制类接口（回测 / 启停实盘 / 查余额）需在请求头带 X-API-Token。"
+          action={<Button variant="ghost" onClick={() => setApiDocOpen(true)}><Terminal size={14} className="inline mr-1" />API 规范</Button>} />
         <div className="px-4 pb-4 text-sm space-y-1.5 font-mono">
           <div><span className="text-dim">地址：</span><span className="text-text">{cfg ? `http://${cfg.api_host}:${cfg.api_port}` : '—'}</span></div>
           <div><span className="text-dim">文档：</span><span className="text-accent">{cfg ? `http://${cfg.api_host}:${cfg.api_port}/docs` : '—'}</span></div>
           <div className="flex items-center gap-2">
             <span className="text-dim">Token：</span>
             {cfg?.api_token_set ? <Badge color="up">已设置（非默认）</Badge> : <Badge color="warn">仍是默认值 change_me</Badge>}
+          </div>
+          <div className="text-[0.7rem] text-dim/70 mt-2 not-italic">
+            点右上「API 规范」可复制一份 Agent / 外部脚本可直接使用的 REST API 使用说明（含全部端点 + curl/Python 示例 + 端到端工作流）。
           </div>
         </div>
       </Card>
@@ -110,6 +116,8 @@ export default function Settings() {
           {msg.text}
         </div>
       )}
+
+      {apiDocOpen && <ApiDocModal onClose={() => setApiDocOpen(false)} />}
     </div>
   )
 }

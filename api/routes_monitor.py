@@ -42,6 +42,13 @@ def strategy_spec(kind: str = "single"):
     return {"kind": "single", "spec": STRATEGY_SPEC, "filename": "strategy_spec.md"}
 
 
+@router.get("/api_spec")
+def api_spec():
+    """REST API 使用规范文本，供前端「设置」页复制给 Agent / 外部脚本用。"""
+    from api.spec import API_SPEC
+    return {"spec": API_SPEC, "filename": "api_spec.md"}
+
+
 @router.get("/user_strategies")
 def user_strategies():
     """列出 strategies/ 下用户 .py 文件（策略实验室保存的代码）。"""
