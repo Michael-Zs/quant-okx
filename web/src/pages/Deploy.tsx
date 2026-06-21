@@ -12,9 +12,8 @@ export default function Deploy() {
   const [name, setName] = useState('')
   const [isDemo, setIsDemo] = useState(true)
   const [bar, setBar] = useState('1H')
-  const [checkIntervalPreset, setCheckIntervalPreset] = useState('3600')
-  const [customInterval, setCustomInterval] = useState(3600)
-  const checkIntervalSec = checkIntervalPreset === 'custom' ? customInterval : Number(checkIntervalPreset)
+  const INTERVAL_MAP: Record<string, number> = { '1H': 3600, '4H': 14400, '1D': 86400 }
+  const checkIntervalSec = INTERVAL_MAP[bar] || 3600
   const [symbols, setSymbols] = useState<string[]>(['BTC-USDT-SWAP'])
   const [instruments, setInstruments] = useState<string[]>(['BTC-USDT-SWAP', 'ETH-USDT-SWAP', 'SOL-USDT-SWAP'])
   const [leverage, setLeverage] = useState(5)
@@ -124,26 +123,10 @@ export default function Deploy() {
             <Select value={isDemo ? 'demo' : 'live'} onChange={(v) => setIsDemo(v === 'demo')}
               options={[{ value: 'demo', label: '模拟盘' }, { value: 'live', label: '真实盘' }]} className="w-full" />
           </Field>
-          <Field label="K线周期">
+          <Field label="周期" hint="选1H→每小时跑，4H→每4小时，1D→每天">
             <Select value={bar} onChange={setBar} options={['1H', '4H', '1D'].map((b) => ({ value: b, label: b }))} className="w-full" />
           </Field>
         </div>
-        <Field label="检查间隔" hint="多长时间跑一次信号检查并调仓">
-          <div className="flex gap-2 mt-1">
-            <Select value={checkIntervalPreset} onChange={setCheckIntervalPreset}
-              options={[
-                { value: '3600', label: '1小时' },
-                { value: '14400', label: '4小时' },
-                { value: '86400', label: '1天' },
-                { value: 'custom', label: '自定义' },
-              ]} className="flex-1" />
-            {checkIntervalPreset === 'custom' && (
-              <Input type="number" value={customInterval} min={60}
-                onChange={(e) => setCustomInterval(+e.target.value)}
-                className="w-28" placeholder="秒数" />
-            )}
-          </div>
-        </Field>
         <Field label="品种（单币策略批量运行）" hint="单币策略会对所选每个币种独立运行">
           <MultiSymbolPicker value={symbols} onChange={setSymbols} instruments={instruments} />
         </Field>
