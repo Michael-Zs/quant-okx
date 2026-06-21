@@ -32,6 +32,40 @@ def out_path(job_id: str) -> Path:
     return settings.LOGS_DIR / f"{job_id}.out"
 
 
+def _lock_path(job_id: str) -> Path:
+    return settings.STATE_DIR / f"{job_id}.lock"
+
+
+def _acquire_lock(job_id: str, stale_sec: int = 30) -> int | None:
+    """用 O_CREAT|O_EXCL 原子创建锁文件。失败时检查是否过期（进程崩溃遗留）。"""
+    lp = _lock_path(job_id)
+    lp.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        return os.open(str(lp), os.O_CREAT | os.O_EXCL | os.O_RDWR)
+    except FileExistsError:
+        # 锁文件已存在，检查是否过期
+        try:
+            if time.time() - os.path.getmtime(lp) > stale_sec:
+                lp.unlink()
+                return os.open(str(lp), os.O_CREAT | os.O_EXCL | os.O_RDWR)
+        except (OSError, FileNotFoundError):
+            pass
+        return None
+
+
+def _release_lock(job_id: str, fd: int):
+    """释放锁文件。"""
+    lp = _lock_path(job_id)
+    try:
+        os.close(fd)
+    except OSError:
+        pass
+    try:
+        lp.unlink()
+    except FileNotFoundError:
+        pass
+
+
 # ---- 读写 ----
 def write_json_atomic(path: Path, data: dict):
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -106,22 +140,34 @@ def get_state(job_id: str) -> dict:
 
 def start_job(config: dict) -> str:
     job_id = config.get("job_id") or gen_job_id()
-    config["job_id"] = job_id
-    config["status"] = "running"
-    config["created_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
-    write_json_atomic(job_path(job_id), config)
+    lock = _acquire_lock(job_id)
+    if not lock:
+        # 没拿到锁：另一个请求正在启动，等它完成
+        time.sleep(0.5)
+        return job_id
+    try:
+        # 锁内双重检查
+        existing = read_json(job_path(job_id), {})
+        if existing.get("status") == "running" and is_process_alive(existing.get("pid")):
+            return job_id
+        config["job_id"] = job_id
+        config["status"] = "running"
+        config["created_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        write_json_atomic(job_path(job_id), config)
 
-    daemon = settings.ROOT / "scripts" / "trader_daemon.py"
-    proc = subprocess.Popen(
-        [sys.executable, str(daemon), "--job", str(job_path(job_id))],
-        stdout=open(out_path(job_id), "a", encoding="utf-8"),
-        stderr=subprocess.STDOUT,
-        start_new_session=True,   # 关键：脱离父进程组，关浏览器不死
-        cwd=str(settings.ROOT),
-    )
-    config["pid"] = proc.pid
-    write_json_atomic(job_path(job_id), config)
-    return job_id
+        daemon = settings.ROOT / "scripts" / "trader_daemon.py"
+        proc = subprocess.Popen(
+            [sys.executable, str(daemon), "--job", str(job_path(job_id))],
+            stdout=open(out_path(job_id), "a", encoding="utf-8"),
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            cwd=str(settings.ROOT),
+        )
+        config["pid"] = proc.pid
+        write_json_atomic(job_path(job_id), config)
+        return job_id
+    finally:
+        _release_lock(job_id, lock)
 
 
 def stop_job(job_id: str) -> bool:
@@ -163,20 +209,31 @@ def delete_job(job_id: str) -> bool:
 # ---- 策略组部署（多组占比；daemon 读 DB，用 --deployment <id>）----
 
 def start_deployment(deployment_id: str) -> str:
-    """启动部署 daemon。用 deployment_id 作为 job/state/log 的 key。"""
+    """启动部署 daemon。幂等：文件锁 + 双重检查，不会重复拉起进程。"""
     job_id = deployment_id
-    config = {"deployment_id": deployment_id, "job_id": job_id,
-              "status": "running", "created_at": time.strftime("%Y-%m-%d %H:%M:%S")}
-    write_json_atomic(job_path(job_id), config)
-    daemon = settings.ROOT / "scripts" / "trader_daemon.py"
-    proc = subprocess.Popen(
-        [sys.executable, str(daemon), "--deployment", deployment_id],
-        stdout=open(out_path(job_id), "a", encoding="utf-8"),
-        stderr=subprocess.STDOUT,
-        start_new_session=True, cwd=str(settings.ROOT))
-    config["pid"] = proc.pid
-    write_json_atomic(job_path(job_id), config)
-    return job_id
+    lock = _acquire_lock(job_id)
+    if not lock:
+        time.sleep(0.5)
+        return job_id
+    try:
+        # 锁内双重检查：已在运行则直接返回
+        existing = read_json(job_path(job_id), {})
+        if existing.get("status") == "running" and is_process_alive(existing.get("pid")):
+            return job_id
+        config = {"deployment_id": deployment_id, "job_id": job_id,
+                  "status": "running", "created_at": time.strftime("%Y-%m-%d %H:%M:%S")}
+        write_json_atomic(job_path(job_id), config)
+        daemon = settings.ROOT / "scripts" / "trader_daemon.py"
+        proc = subprocess.Popen(
+            [sys.executable, str(daemon), "--deployment", deployment_id],
+            stdout=open(out_path(job_id), "a", encoding="utf-8"),
+            stderr=subprocess.STDOUT,
+            start_new_session=True, cwd=str(settings.ROOT))
+        config["pid"] = proc.pid
+        write_json_atomic(job_path(job_id), config)
+        return job_id
+    finally:
+        _release_lock(job_id, lock)
 
 
 def stop_deployment(deployment_id: str) -> bool:

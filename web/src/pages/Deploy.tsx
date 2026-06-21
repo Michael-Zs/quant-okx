@@ -167,7 +167,7 @@ export default function Deploy() {
             <div className="flex items-center justify-between mb-3">
               <div className="text-base font-semibold">监控 · {monitored.name}</div>
               <div className="flex gap-2">
-                <Button variant="primary" onClick={() => start(monitorId)}><Play size={14} className="inline mr-1" />启动</Button>
+                <Button variant="primary" onClick={() => start(monitorId)} disabled={!!monitored.alive}><Play size={14} className="inline mr-1" />启动{monitored.alive ? '（已运行）' : ''}</Button>
                 <Button variant="danger" onClick={() => stop(monitorId)}><Square size={14} className="inline mr-1" />停止</Button>
                 <Button variant="ghost" onClick={() => del(monitorId)}><Trash2 size={14} /></Button>
               </div>
