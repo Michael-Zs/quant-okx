@@ -168,7 +168,7 @@ def backtests(ref_id: Optional[str] = None, node_kind: Optional[str] = None, lim
 
 
 @router.get("/backtests/{bid}")
-def backtest_detail(bid: str, with_equity: bool = True, max_points: int | None = None):
+def backtest_detail(bid: str, with_equity: bool = True, max_points: Optional[int] = None):
     init_db()
     bt = R.get_backtest(bid, with_equity=with_equity)
     if not bt:

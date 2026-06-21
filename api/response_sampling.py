@@ -4,13 +4,13 @@
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
 import pandas as pd
 from core.backtest import metrics as M
 
 
-def normalize_max_points(max_points: int | None) -> int | None:
+def normalize_max_points(max_points: Optional[int]) -> Optional[int]:
     if max_points is None:
         return None
     if max_points <= 0:
@@ -18,7 +18,7 @@ def normalize_max_points(max_points: int | None) -> int | None:
     return max(2, int(max_points))
 
 
-def sampled_index(length: int, max_points: int | None) -> list[int]:
+def sampled_index(length: int, max_points: Optional[int]) -> list[int]:
     if length <= 0:
         return []
     cap = normalize_max_points(max_points)
@@ -35,7 +35,7 @@ def sampled_index(length: int, max_points: int | None) -> list[int]:
     return idx
 
 
-def sample_curve(df: pd.DataFrame, value_col: str, max_points: int | None) -> dict[str, Any] | None:
+def sample_curve(df: pd.DataFrame, value_col: str, max_points: Optional[int]) -> Optional[dict[str, Any]]:
     if df is None or df.empty:
         return None
     idx = sampled_index(len(df), max_points)
@@ -49,7 +49,7 @@ def sample_curve(df: pd.DataFrame, value_col: str, max_points: int | None) -> di
     }
 
 
-def sample_holdings(df: pd.DataFrame, max_points: int | None) -> dict[str, Any]:
+def sample_holdings(df: pd.DataFrame, max_points: Optional[int]) -> dict[str, Any]:
     idx = sampled_index(len(df), max_points)
     sampled = df.iloc[idx] if len(idx) else df.iloc[0:0]
     symbols = [c for c in df.columns if c != "ts"]
@@ -63,7 +63,7 @@ def sample_holdings(df: pd.DataFrame, max_points: int | None) -> dict[str, Any]:
     }
 
 
-def summarize_equity(df: pd.DataFrame) -> dict[str, Any] | None:
+def summarize_equity(df: pd.DataFrame) -> Optional[dict[str, Any]]:
     if df is None or df.empty:
         return None
     equity = pd.Series(df["equity"].to_numpy())
@@ -89,8 +89,8 @@ def summarize_equity(df: pd.DataFrame) -> dict[str, Any] | None:
     }
 
 
-def summarize_trades(trades: pd.DataFrame, bars_per_year: int | None = None,
-                     initial_capital: float | None = None) -> dict[str, Any]:
+def summarize_trades(trades: pd.DataFrame, bars_per_year: Optional[int] = None,
+                     initial_capital: Optional[float] = None) -> dict[str, Any]:
     if trades is None or trades.empty:
         return {
             "n_entries": 0,
@@ -105,8 +105,8 @@ def summarize_trades(trades: pd.DataFrame, bars_per_year: int | None = None,
     entries = trades[trades["side"].isin(["long", "short"])].copy() if "side" in trades.columns else trades.iloc[0:0]
     closes = trades[trades["side"] == "close"].copy() if "side" in trades.columns else trades.iloc[0:0]
     hold_bars: list[int] = []
-    last_entry_idx: int | None = None
-    last_entry_dir: int | None = None
+    last_entry_idx: Optional[int] = None
+    last_entry_dir: Optional[int] = None
     switch_count = 0
 
     for i, row in trades.reset_index(drop=True).iterrows():
