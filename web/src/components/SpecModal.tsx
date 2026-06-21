@@ -12,12 +12,13 @@ export function SpecModal({ kind, onClose }: { kind: 'single' | 'multi'; onClose
     api.strategySpec(kind).then((r) => setData({ spec: r.spec, filename: r.filename })).catch((e) => setErr(String(e)))
   }, [kind])
 
-  async function copy() {
-    if (!data) return
-    try {
-      await navigator.clipboard.writeText(data.spec)
-      setCopied(true); setTimeout(() => setCopied(false), 2000)
-    } catch { setErr('自动复制受限，请手动选中下方文本复制') }
+  function copyHint() {
+    const hint = `Fetch the ${
+      kind === 'single' ? 'single-asset (Strategy)' : 'multi-asset (MultiStrategy)'
+    } development spec from:\nGET http://127.0.0.1:8787/api/strategy_spec?kind=${kind}\n\nFollow the spec and write a strategy.`
+    navigator.clipboard.writeText(hint)
+      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
+      .catch(() => setErr('复制失败，请手动复制'))
   }
 
   function download() {
@@ -38,9 +39,9 @@ export function SpecModal({ kind, onClose }: { kind: 'single' | 'multi'; onClose
             <div className="text-sm font-semibold">AI 策略开发规范（{kind === 'single' ? '单币 Strategy' : '多币 MultiStrategy'}）</div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={copy} disabled={!data}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs bg-accent/15 text-accent hover:bg-accent/25 disabled:opacity-50">
-              <Copy size={13} /> {copied ? '已复制' : '复制'}
+            <button onClick={copyHint}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs bg-accent/15 text-accent hover:bg-accent/25">
+              <Copy size={13} /> {copied ? '已复制' : '复制提示给 AI'}
             </button>
             <button onClick={download} disabled={!data}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs bg-card text-dim hover:text-text disabled:opacity-50 border border-line">
@@ -55,7 +56,7 @@ export function SpecModal({ kind, onClose }: { kind: 'single' | 'multi'; onClose
             : <pre className="whitespace-pre-wrap font-mono text-[0.7rem]">{data.spec}</pre>}
         </div>
         <div className="px-4 py-2 border-t border-line text-[0.7rem] text-dim/70">
-          复制这份规范给 AI（Claude / ChatGPT 等），描述你的策略想法，它就能按规范输出可直接保存使用的策略代码。
+          点击「复制提示给 AI」将获取规范的 API 调用指令发给 Agent，Agent 会自动拉取完整开发规范并按需编写策略代码。
         </div>
       </div>
     </div>
