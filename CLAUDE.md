@@ -73,6 +73,8 @@ python scripts/trader_daemon.py --job runtime/jobs/<job_id>.json
 
 `api/`（FastAPI，绑 `127.0.0.1`）：`routes_monitor.py`（GET，公开）与 `routes_control.py`（POST/DELETE，全部需 `X-API-Token` 头，由 `api/__init__.py::verify_token` 校验）。控制层是对 `core/` 能力的薄封装（触发回测、启停实盘、网格搜索、多币回测、策略文件 CRUD、.env 编辑、缓存清理）。回测结果落 `backtests` 表，由 `GET /api/backtests/{id}` 读取。
 
+完整 REST API 规范见 **[docs/api-spec.md](docs/api-spec.md)**。关键注意：`balance` 是可用余额（free），`equity` 才是总权益（对应 OKX App 显示的账户权益）。
+
 ## React 前端
 
 `web/src/pages/*.tsx` 各自是一个导航页（`web/src/App.tsx` 用 `react-router` 聚合）。现有页面：`Dashboard`（仪表盘）、`Explore`（策略探索 · 模板调参 + 实时回测）、`Compose`（策略组合 · 拖拽编排）、`Multi`（多币策略 · 持仓热力图）、`Lab`（策略实验室 · 代码编辑器 + 网格搜索）、`Deploy`（实盘部署 + 监控）、`Settings`（设置）。页面都是 `core/` 经 `api/` 的薄壳——绘图/交互在 `web/`，逻辑放 `core/`。新增页面需在 `web/src/App.tsx` 的 `nav` 列表与 `<Routes>` 里登记。共用组件在 `web/src/components/`，API 客户端在 `web/src/api/client.ts`，类型契约在 `web/src/api/types.ts`（与 `api/schemas.py` + `core/strategy/node.py` 对齐）。

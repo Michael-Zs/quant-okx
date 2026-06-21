@@ -25,8 +25,27 @@ def get_exchange(is_demo: bool = True) -> ccxt.Exchange:
 
 
 def get_balance(ex, quote: str = "USDT") -> float:
+    """返回可用余额（free），不含已占用的保证金。总权益请用 get_equity()。"""
     bal = ex.fetch_balance()
     return float(bal.get(quote, {}).get("free", 0) or 0)
+
+
+def get_equity(ex, quote: str = "USDT") -> float:
+    """返回总权益（所有资产按市价折 USDT）。
+
+    对应 OKX 账户页展示的「账户权益」——含 USDT 余额 + BTC/ETH 等非 quote 资产。
+    """
+    bal = ex.fetch_balance()
+    total_quote = float(bal.get("total", {}).get(quote, 0) or 0)
+    # 把非 quote 余额按市价折成 quote
+    extra = 0.0
+    for currency, amount in (bal.get("total") or {}).items():
+        if currency == quote or not amount or float(amount) == 0:
+            continue
+        ticker = ex.fetch_ticker(f"{currency}/{quote}")
+        if ticker and ticker.get("last"):
+            extra += float(amount) * float(ticker["last"])
+    return total_quote + extra
 
 
 def get_position(ex, ccxt_symbol: str) -> dict:

@@ -34,6 +34,12 @@ curl -H "X-API-Token: $TOKEN" http://127.0.0.1:8787/api/balance?is_demo=true
 - **template_name**：策略在注册表里的 key（如 `ma_cross`、`rsi`、`momentum_rotation`），用 `GET /api/templates` 拿全量 + 参数 schema。
 - **指标字段**（`BacktestMetrics`）：`total_return / annual_return / max_drawdown / sharpe / sortino / calmar / volatility / win_rate / profit_factor / n_trades / final_capital`。收益率/回撤/胜率是小数（0.12 = 12%）。
 
+> ⚠️ **余额 vs 权益**：API 返回两个字段——
+> - `balance`：**可用余额**（free USDT，不含已占用保证金）
+> - `equity`：**总权益**（free + 保证金 + 浮盈 + 其他币种折 USDT，对应 OKX App 显示的账户权益）
+>
+> 判断盈亏请用 `equity` 对比 `initial_capital`。
+
 ## 4. 端点速查
 
 ### 监控类（GET，公开）
@@ -47,11 +53,11 @@ curl -H "X-API-Token: $TOKEN" http://127.0.0.1:8787/api/balance?is_demo=true
 | `GET /api/user_strategies` | `strategies/` 目录下用户保存的 `.py` 代码文件列表 |
 | `GET /api/strategy_spec?kind=single\|multi` | AI 策略开发规范文本（给 Agent 写策略用） |
 | `GET /api/deployments` | 部署列表（含 `alive` 运行状态） |
-| `GET /api/deployments/{did}/state` | 部署实时状态（余额/持仓/动作） |
+| `GET /api/deployments/{did}/state` | 部署实时状态（含 `balance` 可用余额 + `equity` 总权益） |
 | `GET /api/deployments/{did}/logs?n=50` | 部署事件日志 |
 | `GET /api/backtests?ref_id=&node_kind=&limit=50` | 回测历史列表 |
 | `GET /api/backtests/{bid}?with_equity=true` | 单次回测详情（含权益曲线） |
-| `GET /api/balance?is_demo=true` ⚑ | 账户余额（需 token） |
+| `GET /api/balance?is_demo=true` ⚑ | 账户余额（返回 `balance` 可用 + `equity` 总权益） |
 | `GET /api/positions?is_demo=true&symbol=BTC-USDT-SWAP` ⚑ | 当前持仓（需 token） |
 
 ### 策略实例 CRUD（GET 公开 / 写需 token）
@@ -134,6 +140,26 @@ curl -H "X-API-Token: $TOKEN" http://127.0.0.1:8787/api/balance?is_demo=true
 {"group_id":"grp_xxx","weight":1.0,"invert":false}
 ```
 
+### 账户余额响应
+```jsonc
+// GET /api/balance
+{
+  "balance": 97785.63,      // 可用余额（free USDT）
+  "equity":  106897.74,     // 总权益 = free + margin + upnl + 其他币种折USDT
+  "is_demo": true
+}
+
+// GET /api/deployments/{did}/state 也包含 balance + equity
+{
+  "deployment_id": "dep_xxx",
+  "balance": 97766.13,      // 可用余额
+  "equity":  106906.32,     // 总权益
+  "positions": {...},
+  "actions": ["BTC-USDT-SWAP hold"],
+  ...
+}
+```
+
 ## 6. 端到端工作流（复制即用）
 
 ### 工作流 A：发现模板 → 回测一个单币策略
@@ -193,6 +219,7 @@ DID=$(curl -sX POST http://127.0.0.1:8787/api/deployments \\
        \"leverage\":5,\"position_ratio\":0.1,\"initial_capital\":10000}" | jq -r .id)
 curl -X POST http://127.0.0.1:8787/api/deployments/$DID/start -H "X-API-Token: $TOKEN"
 curl http://127.0.0.1:8787/api/deployments/$DID/state
+# → 返回 balance（可用余额）+ equity（总权益），盈亏看 equity 对比 initial_capital
 curl http://127.0.0.1:8787/api/deployments/$DID/logs?n=20
 curl -X POST http://127.0.0.1:8787/api/deployments/$DID/stop -H "X-API-Token: $TOKEN"
 ```
@@ -231,7 +258,35 @@ curl -X POST http://127.0.0.1:8787/api/user_strategies \\
 ```
 之后该策略即出现在 `GET /api/templates` 列表里，可像内置策略一样回测/部署。
 
-## 7. WebSocket：实时回测预览
+## 7. 监控部署盈亏
+
+部署运行后，通过 state 端点获取盈亏信息：
+
+```bash
+# 获取状态（balance=可用余额, equity=总权益）
+curl http://127.0.0.1:8787/api/deployments/$DID/state
+
+# 响应示例：
+# {
+#   "balance": 97766.13,       ← 可用 USDT（可用于开仓）
+#   "equity":  106906.32,      ← 总权益（对应 OKX App 显示的账户权益，含保证金+BTC等）
+#   "positions": {
+#     "BTC-USDT-SWAP": {
+#       "entry_price": 64390.0,
+#       "price": 64269.7,
+#       "unrealized_pnl": -32.54,
+#       "position_contracts": 37.97,
+#       "position_dir": 1
+#     }
+#   },
+#   "actions": ["BTC-USDT-SWAP hold"],
+#   "status": "running"
+# }
+#
+# 盈亏 = equity - initial_capital（部署时设定的值）
+```
+
+## 8. WebSocket：实时回测预览
 前端调参时用，低延迟。Agent 一般用 `POST /api/backtest` 即可，但若要流式预览：
 ```js
 const ws = new WebSocket('ws://127.0.0.1:8787/ws/backtest')
@@ -247,14 +302,14 @@ ws.onmessage = (e) => {
 }
 ```
 
-## 8. 错误处理
+## 9. 错误处理
 - `400`：参数错误 / 数据加载失败 / 策略代码语法错（message 有详情）
 - `401`：token 缺失/错误
 - `404`：未知 id / 未知策略 / 文件不存在
 - `409`：名称冲突（策略实例/组/部署名唯一）
 - 回测/策略执行中的异常会被捕获并转成 `400`，不会让服务崩溃。
 
-## 9. Python 调用示例（requests）
+## 10. Python 调用示例（requests）
 ```python
 import requests
 BASE = "http://127.0.0.1:8787"
@@ -271,6 +326,10 @@ r = requests.post(f"{BASE}/api/backtest", headers=H, json={
 }).json()
 print(r["metrics"]["total_return"], r["metrics"]["sharpe"])
 
+# 查余额（equity 才是总权益）
+r = requests.get(f"{BASE}/api/balance?is_demo=true", headers=H).json()
+print(f"可用: {r['balance']:.2f}, 总权益: {r['equity']:.2f}")
+
 # 部署实盘 + 轮询状态
 d = requests.post(f"{BASE}/api/deployments", headers=H, json={
     "name":"api部署","is_demo":True,"bar":"1H","symbols":["BTC-USDT-SWAP"],
@@ -279,9 +338,12 @@ d = requests.post(f"{BASE}/api/deployments", headers=H, json={
 }).json()
 requests.post(f"{BASE}/api/deployments/{d['id']}/start", headers=H)
 state = requests.get(f"{BASE}/api/deployments/{d['id']}/state").json()
+pnl = state["equity"] - d["initial_capital"]  # 用 equity 算盈亏
+print(f"盈亏: {pnl:.2f}")
 ```
 
-## 10. 重要约束
+## 11. 重要约束
+- **余额 vs 权益**：`balance` = 可用余额（free USDT），`equity` = 总权益（含保证金 + 其他币种折 USDT）。判断盈亏请用 `equity` 对比 `initial_capital`。
 - **回测引擎**为复利模型，默认**不建模爆仓**，高杠杆回测偏乐观。
 - **实盘有风险**：真实盘（`is_demo:false`）会真实下单，请从模拟盘 + 最小仓位开始。
 - **策略代码**拥有完整 Python 权限，仅运行可信代码。

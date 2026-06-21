@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from core.data.fetcher import fetch_recent
 from core.data.symbols import okx_to_ccxt
-from core.live.exchange import get_positions, get_balance, set_leverage, market_order
+from core.live.exchange import get_positions, get_balance, get_equity, set_leverage, market_order
 from core.persist import repositories as R
 from core.strategy.node import node_from_spec, NodeContext, AllocationGroup
 from core.strategy.registry import StrategyRegistry
@@ -92,6 +92,7 @@ def run_deployment_round(ex, deployment_id: str) -> dict:
     ctx = NodeContext(data=data, bar=deployment["bar"])
 
     balance = get_balance(ex)
+    equity = get_equity(ex)
     per_unit = balance * float(deployment["position_ratio"]) * float(deployment["leverage"])
     targets = compute_targets(deployment, ctx, per_unit)   # {okx_symbol: target_notional}
 
@@ -131,6 +132,7 @@ def run_deployment_round(ex, deployment_id: str) -> dict:
         except Exception as e:
             actions.append(f"{sym} 下单失败: {e}")   # 单 symbol 失败不中断
 
-    return {"deployment_id": deployment_id, "balance": balance,
+    return {"deployment_id": deployment_id,
+            "balance": balance, "equity": equity,
             "targets": {s: round(v, 2) for s, v in targets.items()},
             "actions": actions, "positions": positions_state}

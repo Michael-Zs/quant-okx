@@ -19,7 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from core.live.runtime import read_json, write_json_atomic, state_path, append_log
-from core.live.exchange import get_exchange, get_balance, get_position
+from core.live.exchange import get_exchange, get_balance, get_equity, get_position
 from core.live.trader import run_once
 from core.data.symbols import okx_to_ccxt
 from core.strategy.registry import StrategyRegistry
@@ -73,6 +73,7 @@ def _run_deployment_loop(deployment_id: str):
                 "deployment_id": deployment_id, "pid": os.getpid(), "status": "running",
                 "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "balance": res.get("balance"),
+                "equity": res.get("equity"),
                 "targets": res.get("targets", {}),
                 "positions": res.get("positions", {}),
                 "actions": res.get("actions", []),
@@ -122,7 +123,8 @@ def _run_job_loop(job_file: str):
                 "last_signal": res["signal"], "last_price": res["price"],
                 "last_action": res["action"], "position_dir": pos["dir"],
                 "position_contracts": pos["contracts"], "entry_price": pos["entry_price"],
-                "unrealized_pnl": pos["unrealized_pnl"], "balance": get_balance(ex),
+                "unrealized_pnl": pos["unrealized_pnl"],
+                "balance": get_balance(ex), "equity": get_equity(ex),
                 "next_check_at": time.strftime("%Y-%m-%d %H:%M:%S",
                                                time.localtime(time.time() + interval)),
                 "error": None,

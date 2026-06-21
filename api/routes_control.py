@@ -3,9 +3,9 @@
 - POST /api/backtest：统一吃 node_spec 或 ref_id，经 run_node 回测，结果落 backtests 表。
 - 部署 CRUD + 启停（start_deployment 起 daemon --deployment）。
 """
-from __future__ import annotations
 import re
 from dataclasses import asdict
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -220,7 +220,7 @@ class MultiBacktestRequest(BaseModel):
     symbols: list[str]
     bar: str = "1H"
     days: int = 180
-    allocation: dict[str, float] | None = None   # {symbol: weight}，默认等权
+    allocation: Optional[dict[str, float]] = None   # {symbol: weight}，默认等权
     invert: bool = False
     initial_capital: float = 10000.0
     leverage: int = 5
@@ -274,9 +274,9 @@ def multi_backtest(req: MultiBacktestRequest):
 # ---------- 设置：.env 编辑 / 缓存清理 ----------
 
 class EnvUpdate(BaseModel):
-    OKX_API_KEY: str | None = None
-    OKX_API_SECRET: str | None = None
-    OKX_API_PASSPHRASE: str | None = None
+    OKX_API_KEY: Optional[str] = None
+    OKX_API_SECRET: Optional[str] = None
+    OKX_API_PASSPHRASE: Optional[str] = None
 
 
 @router.post("/config/env")

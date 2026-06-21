@@ -1,5 +1,6 @@
 """监控类路由（GET）：行情/模板/部署/回测历史/账户。"""
 import math
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 
 from core.strategy.registry import StrategyRegistry
@@ -120,9 +121,11 @@ def market(symbol: str, bar: str = "1H", days: int = 7):
 
 @router.get("/balance", dependencies=[Depends(verify_token)])
 def balance(is_demo: bool = True):
-    from core.live.exchange import get_exchange, get_balance
+    """返回账户余额。balance=可用余额(free)，equity=总权益(free+used+upnl)。"""
+    from core.live.exchange import get_exchange, get_balance, get_equity
     try:
-        return {"balance": get_balance(get_exchange(is_demo)), "is_demo": is_demo}
+        ex = get_exchange(is_demo)
+        return {"balance": get_balance(ex), "equity": get_equity(ex), "is_demo": is_demo}
     except Exception as e:
         raise HTTPException(400, str(e))
 
@@ -162,7 +165,7 @@ def deployment_logs(did: str, n: int = 50):
 
 
 @router.get("/backtests")
-def backtests(ref_id: str | None = None, node_kind: str | None = None, limit: int = 50):
+def backtests(ref_id: Optional[str] = None, node_kind: Optional[str] = None, limit: int = 50):
     init_db()
     return {"backtests": R.list_backtests(ref_id=ref_id, node_kind=node_kind, limit=limit)}
 

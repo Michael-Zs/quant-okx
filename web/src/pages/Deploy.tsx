@@ -174,7 +174,7 @@ export default function Deploy() {
             </div>
             {state && (
               <Card className="mb-4">
-                <CardHeader title="持仓与状态" subtitle={`余额 ${fmt(state.balance as number)} · ${String(state.status ?? '')}`} />
+                <CardHeader title="持仓与状态" subtitle={`权益 ${fmt((state.equity ?? state.balance) as number)}${state.equity == null ? ' (可用)' : ''} · ${String(state.status ?? '')}`} />
                 <div className="p-4 pt-0">
                   {Object.entries(positions).map(([sym, p]) => (
                     <div key={sym} className="flex items-center justify-between py-1.5 border-b border-line last:border-0">
