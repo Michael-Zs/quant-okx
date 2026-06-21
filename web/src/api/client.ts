@@ -27,7 +27,7 @@ export const api = {
   strategySpec: (kind: 'single' | 'multi') =>
     req<{ kind: string; spec: string; filename: string }>(`/strategy_spec?kind=${kind}`),
   // REST API 使用规范，供「复制给 Agent / 外部脚本」用
-  apiSpec: () => req<{ spec: string; filename: string }>('/api/api_spec'),
+  apiSpec: () => req<{ spec: string; filename: string }>('/api_spec'),
   // 可用合约列表（搜索选择用）
   instruments: () => req<{ instruments: string[]; fallback?: boolean }>('/instruments'),
 
