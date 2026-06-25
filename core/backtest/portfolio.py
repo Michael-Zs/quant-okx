@@ -8,7 +8,7 @@ AllocationGroup（core/strategy/node.py）只 collect 各子信号 + weight/inve
 本文件按子策略分配资金（多策略资金槽）——两者都是「各跑独立回测再合成权益」。
 """
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
@@ -23,6 +23,7 @@ class PortfolioReport:
     per_strategy: list                    # [(name, weight, BacktestReport), ...]
     metrics: dict
     initial_capital: float
+    benchmark_curve: pd.DataFrame = field(default_factory=pd.DataFrame)   # 合成组合基准权益 ts, equity
 
 
 def _child_name(childref) -> str:
@@ -60,6 +61,7 @@ def run_group(group, ctx, cfg: BacktestConfig) -> PortfolioReport:
 
     per: list = []
     equity_parts: list = []
+    benchmark_parts: list = []
     all_trades: list = []
     ref_ts = None
 
@@ -71,11 +73,16 @@ def run_group(group, ctx, cfg: BacktestConfig) -> PortfolioReport:
             ref_ts = rep.equity_curve["ts"].values
         per.append((_child_name(c), w, rep))
         equity_parts.append(rep.equity_curve["equity"].values)
+        benchmark_parts.append(rep.benchmark_curve["equity"].values
+                               if not rep.benchmark_curve.empty else 0.0)
         if not rep.trades.empty:
             all_trades.append(rep.trades)
 
     combined = np.sum(np.vstack(equity_parts), axis=0) if equity_parts else np.array([])
+    benchmark_combined = (np.sum(np.vstack(benchmark_parts), axis=0)
+                          if benchmark_parts else np.array([]))
     combined_s = pd.Series(combined)
+    benchmark_s = pd.Series(benchmark_combined) if len(benchmark_combined) else None
     ts = ref_ts if ref_ts is not None else np.array([])
     combined_ec = pd.DataFrame({"ts": ts, "equity": combined})
     trades_df = (pd.concat(all_trades, ignore_index=True) if all_trades
@@ -94,4 +101,11 @@ def run_group(group, ctx, cfg: BacktestConfig) -> PortfolioReport:
         "n_trades": M.n_trades(trades_df),
         "final_capital": float(combined[-1]) if len(combined) else cfg.initial_capital,
     }
-    return PortfolioReport(combined_ec, per, metrics, cfg.initial_capital)
+    # 资金层组合的基准 = 各子按 weight 切分资金后的 buy & hold 合成，
+    # 与组合权益同口径、同窗口。用来回答「拆成多策略比单买持有好在哪」。
+    benchmark_curve = pd.DataFrame()
+    if benchmark_s is not None and len(benchmark_s) >= 2:
+        metrics["benchmark"] = M.benchmark_metrics(combined_s, benchmark_s, cfg.bars_per_year)
+        benchmark_curve = pd.DataFrame({"ts": ts, "equity": benchmark_combined})
+    return PortfolioReport(combined_ec, per, metrics, cfg.initial_capital,
+                           benchmark_curve=benchmark_curve)

@@ -8,11 +8,12 @@ import pandas as pd
 class BacktestReport:
     equity_curve: pd.DataFrame    # 列: ts, equity
     trades: pd.DataFrame          # 列: ts, side(long/short/close), price, pnl, equity, size, dir
-    metrics: dict                 # 绩效指标字典
+    metrics: dict                 # 绩效指标字典（含可选的 benchmark 子字典）
     config: dict = field(default_factory=dict)   # 回测配置快照
     strategy_name: str = ""
     symbol: str = ""
     bar: str = ""
+    benchmark_curve: pd.DataFrame = field(default_factory=pd.DataFrame)   # 同 symbol buy & hold 权益：列 ts, equity（与 equity_curve 同时间轴、同长度）
 
 
 @dataclass
@@ -30,6 +31,7 @@ class BacktestOutcome:
     config: dict = field(default_factory=dict)
     symbol: str = ""
     bar: str = ""
+    benchmark_curve: pd.DataFrame = field(default_factory=pd.DataFrame)   # 组合层基准 buy & hold 权益（ts, equity），与 equity_curve 同长度
 
     @property
     def total_return(self) -> float:
