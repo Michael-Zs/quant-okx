@@ -92,9 +92,9 @@ export default function Explore() {
   const visible = templates.filter((t) => t.strategy_kind === 'single')
 
   return (
-    <div className="flex h-full">
+    <div className="flex flex-col md:flex-row md:h-full">
       {/* 左：模板库 */}
-      <div className="w-72 shrink-0 border-r border-line p-4 overflow-auto">
+      <div className="w-full md:w-72 md:shrink-0 border-b md:border-b-0 md:border-r border-line p-4 md:overflow-auto">
         <button onClick={() => setSpecOpen(true)}
           className="w-full mb-3 flex items-center justify-center gap-1.5 py-1.5 rounded text-xs font-medium border border-accent/30 text-accent hover:bg-accent/10 transition-colors">
           <Bot size={14} /> AI 策略开发规范（单币）
@@ -111,7 +111,7 @@ export default function Explore() {
       </div>
 
       {/* 中：参数 */}
-      <div className="w-72 shrink-0 border-r border-line p-4 overflow-auto">
+      <div className="w-full md:w-72 md:shrink-0 border-b md:border-b-0 md:border-r border-line p-4 md:overflow-auto">
         {tpl ? (
           <>
             <div className="text-base font-semibold">{tpl.display_name}</div>
@@ -143,7 +143,7 @@ export default function Explore() {
             <Field label="保存为单策略实例">
               <Input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="给这个参数组合命名…" className="w-full" />
             </Field>
-            <Button variant="primary" className="w-full mt-2" onClick={save} disabled={!saveName}>
+            <Button variant="primary" className="w-full mt-2 py-2.5 md:py-2" onClick={save} disabled={!saveName}>
               <Save size={15} className="inline mr-1.5" />保存单策略
             </Button>
             {msg && <div className="text-xs text-accent mt-2 break-all">{msg}</div>}
@@ -154,7 +154,7 @@ export default function Explore() {
       </div>
 
       {/* 右：实时回测预览 */}
-      <div className="flex-1 p-4 overflow-auto">
+      <div className="w-full md:flex-1 p-4 md:overflow-auto">
         <Card>
           <CardHeader title="权益曲线"
             subtitle={tpl ? `${tpl.display_name} · ${symbol} ${bar} · ${days}天${invert ? ' · 反向' : ''}` : ''} />

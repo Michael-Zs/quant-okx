@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Rocket, Play, Square, Trash2, Plus, TrendingUp } from 'lucide-react'
+import { Rocket, Play, Square, Trash2, Plus, TrendingUp, ChevronRight } from 'lucide-react'
 import { api } from '../api/client'
 import type { StrategyGroup, Deployment, BacktestMetrics, SampledSeries, NodeSpec } from '../api/types'
 import { Card, CardHeader, Button, Slider, Toggle, Select, Input, Field, Badge } from '../components/ui'
@@ -133,37 +133,48 @@ export default function Deploy() {
   const monitored = deployments.find((d) => d.id === monitorId)
 
   return (
-    <div className="flex h-full">
+    <div className="flex flex-col md:flex-row md:h-full">
       {/* 左：策略组库 + 已部署 */}
-      <div className="w-64 shrink-0 border-r border-line p-4 overflow-auto">
-        <div className="text-sm font-semibold mb-2">策略组</div>
-        <div className="space-y-1 mb-6">
-          {groups.map((g) => (
-            <button key={g.id} onClick={() => addGroup(g.id)} disabled={!!sel[g.id]}
-              className="w-full text-left px-3 py-2 rounded bg-card border border-line hover:border-accent/30 disabled:opacity-40">
-              <div className="text-sm truncate">{g.name}</div>
-              <div className="text-[0.7rem] text-dim">{g.spec.node_type === 'allocation_group' ? '资金分配' : '信号组合'}</div>
-            </button>
-          ))}
-          {groups.length === 0 && <div className="text-xs text-dim">先在「策略组合」保存组</div>}
-        </div>
-        <div className="text-sm font-semibold mb-2">已部署</div>
-        <div className="space-y-1">
-          {deployments.map((d) => (
-            <div key={d.id} onClick={() => loadDeployment(d)}
-              className={`px-3 py-2 rounded border cursor-pointer ${monitorId === d.id ? 'border-accent bg-card-strong' : 'border-line bg-card hover:bg-card-strong'}`}>
-              <div className="flex items-center justify-between">
-                <span className="text-sm truncate">{d.name}</span>
-                {d.alive ? <Badge color="up">运行</Badge> : <Badge color="dim">停止</Badge>}
+      <div className="w-full md:w-64 md:shrink-0 border-b md:border-b-0 md:border-r border-line p-4 md:overflow-auto">
+        <details open className="mb-4 group">
+          <summary className="text-sm font-semibold cursor-pointer flex items-center gap-1.5 list-none [&::-webkit-details-marker]:hidden">
+            <ChevronRight size={14} className="text-dim transition-transform group-open:rotate-90" />
+            策略组
+          </summary>
+          <div className="space-y-1 mt-2">
+            {groups.map((g) => (
+              <button key={g.id} onClick={() => addGroup(g.id)} disabled={!!sel[g.id]}
+                className="w-full text-left px-3 py-2 rounded bg-card border border-line hover:border-accent/30 disabled:opacity-40">
+                <div className="text-sm truncate">{g.name}</div>
+                <div className="text-[0.7rem] text-dim">{g.spec.node_type === 'allocation_group' ? '资金分配' : '信号组合'}</div>
+              </button>
+            ))}
+            {groups.length === 0 && <div className="text-xs text-dim">先在「策略组合」保存组</div>}
+          </div>
+        </details>
+
+        <details open className="group">
+          <summary className="text-sm font-semibold cursor-pointer flex items-center gap-1.5 list-none [&::-webkit-details-marker]:hidden">
+            <ChevronRight size={14} className="text-dim transition-transform group-open:rotate-90" />
+            已部署
+          </summary>
+          <div className="space-y-1 mt-2">
+            {deployments.map((d) => (
+              <div key={d.id} onClick={() => loadDeployment(d)}
+                className={`px-3 py-2 rounded border cursor-pointer ${monitorId === d.id ? 'border-accent bg-card-strong' : 'border-line bg-card hover:bg-card-strong'}`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm truncate">{d.name}</span>
+                  {d.alive ? <Badge color="up">运行</Badge> : <Badge color="dim">停止</Badge>}
+                </div>
+                <div className="text-[0.7rem] text-dim mt-0.5">{d.id.slice(0, 16)}</div>
               </div>
-              <div className="text-[0.7rem] text-dim mt-0.5">{d.id.slice(0, 16)}</div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </details>
       </div>
 
       {/* 中：部署配置 */}
-      <div className="w-80 shrink-0 border-r border-line p-4 overflow-auto">
+      <div className="w-full md:w-80 md:shrink-0 border-b md:border-b-0 md:border-r border-line p-4 md:overflow-auto">
         <div className="flex items-center justify-between mb-3">
           <div className="text-base font-semibold flex items-center gap-2"><Rocket size={18} />{editingDeployId ? '编辑部署' : '新建部署'}</div>
           {editingDeployId && <button onClick={newDeploy} className="text-xs text-accent hover:underline">+ 新建</button>}
@@ -214,8 +225,8 @@ export default function Deploy() {
           <Input type="number" value={btDays} onChange={(e) => setBtDays(+e.target.value)} className="w-full" />
         </Field>
         <div className="grid grid-cols-2 gap-2 mt-3">
-          <Button variant="primary" onClick={save}><Plus size={15} className="inline mr-1.5" />{editingDeployId ? '更新部署' : '创建部署'}</Button>
-          <Button variant="ghost" onClick={runBacktest} disabled={btLoading}><TrendingUp size={15} className="inline mr-1.5" />{btLoading ? '回测中…' : '回测预览'}</Button>
+          <Button variant="primary" className="py-2.5 md:py-2" onClick={save}><Plus size={15} className="inline mr-1.5" />{editingDeployId ? '更新部署' : '创建部署'}</Button>
+          <Button variant="ghost" className="py-2.5 md:py-2" onClick={runBacktest} disabled={btLoading}><TrendingUp size={15} className="inline mr-1.5" />{btLoading ? '回测中…' : '回测预览'}</Button>
         </div>
         {editingDeployId && deployments.find((d) => d.id === editingDeployId)?.alive && (
           <div className="text-[0.7rem] text-accent mt-2">部署运行中：修改需停止再启动才生效</div>
@@ -224,7 +235,7 @@ export default function Deploy() {
       </div>
 
       {/* 右：监控 */}
-      <div className="flex-1 p-4 overflow-auto">
+      <div className="w-full md:flex-1 p-4 md:overflow-auto">
         {btResult && (
           <Card className="mb-4">
             <div className="flex items-center justify-between px-4 pt-4">
@@ -244,7 +255,7 @@ export default function Deploy() {
         )}
         {monitorId && monitored ? (
           <>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
               <div className="text-base font-semibold">监控 · {monitored.name}</div>
               <div className="flex gap-2">
                 <Button variant="primary" onClick={() => start(monitorId)} disabled={!!monitored.alive}><Play size={14} className="inline mr-1" />启动{monitored.alive ? '（已运行）' : ''}</Button>

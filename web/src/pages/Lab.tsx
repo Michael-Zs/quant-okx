@@ -37,8 +37,8 @@ export default function Lab() {
   const [tab, setTab] = useState<'edit' | 'grid'>('edit')
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-6 pt-5 pb-3 border-b border-line flex items-center justify-between">
+    <div className="flex flex-col md:h-full">
+      <div className="px-4 md:px-6 pt-4 md:pt-5 pb-3 border-b border-line flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
             <Bot size={20} className="text-accent" /> 策略实验室
@@ -54,7 +54,7 @@ export default function Lab() {
           ))}
         </div>
       </div>
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 md:overflow-auto">
         {tab === 'edit' ? <EditorTab /> : <GridTab />}
       </div>
     </div>
@@ -110,9 +110,9 @@ function EditorTab() {
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex flex-col md:flex-row md:h-full">
       {/* 左：文件列表 */}
-      <div className="w-60 shrink-0 border-r border-line p-3 overflow-auto">
+      <div className="w-full md:w-60 md:shrink-0 border-b md:border-b-0 md:border-r border-line p-3 md:overflow-auto">
         <button onClick={newFile}
           className="w-full mb-3 flex items-center justify-center gap-1.5 py-1.5 rounded text-xs font-medium border border-accent/30 text-accent hover:bg-accent/10">
           + 新建策略
@@ -135,9 +135,9 @@ function EditorTab() {
       </div>
 
       {/* 中+右：编辑器 */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="w-full md:flex-1 flex flex-col min-w-0">
         <div className="p-4 border-b border-line space-y-3">
-          <div className="flex items-end gap-3">
+          <div className="flex flex-wrap items-end gap-3">
             <Field label="策略名（英文标识符，作为文件名与 registry key）">
               <Input value={name} onChange={(e) => { setName(e.target.value); setDirty(true) }}
                      className="w-72" spellCheck={false} />
@@ -163,7 +163,7 @@ function EditorTab() {
             </div>
           )}
         </div>
-        <div className="flex-1 min-h-0 p-4">
+        <div className="p-4 h-[60vh] md:h-auto md:flex-1 md:min-h-0">
           <CodeEditor value={code} onChange={(v) => { setCode(v); setDirty(true) }} />
         </div>
       </div>
@@ -266,9 +266,9 @@ function GridTab() {
   const numericParams = tpl?.params.filter((p) => p.kind !== 'select') ?? []
 
   return (
-    <div className="flex h-full">
+    <div className="flex flex-col md:flex-row md:h-full">
       {/* 左：配置 */}
-      <div className="w-80 shrink-0 border-r border-line p-4 overflow-auto">
+      <div className="w-full md:w-80 md:shrink-0 border-b md:border-b-0 md:border-r border-line p-4 md:overflow-auto">
         {tpl ? (
           <>
             <Field label="策略">
@@ -319,7 +319,7 @@ function GridTab() {
               </select>
             </Field>
             <div className="text-xs text-dim mt-3">将测试 <span className="text-accent font-semibold">{total}</span> 个组合</div>
-            <Button variant="primary" className="w-full mt-3" onClick={run} disabled={loading || total === 0 || numericParams.length === 0}>
+            <Button variant="primary" className="w-full mt-3 py-2.5 md:py-2" onClick={run} disabled={loading || total === 0 || numericParams.length === 0}>
               <Search size={15} className="inline mr-1.5" />{loading ? '搜索中…' : '开始搜索'}
             </Button>
             {err && <div className="text-xs text-down mt-2 break-all">{err}</div>}
@@ -328,7 +328,7 @@ function GridTab() {
       </div>
 
       {/* 右：结果 */}
-      <div className="flex-1 overflow-auto p-4">
+      <div className="w-full md:flex-1 md:overflow-auto p-4">
         {results.length === 0 ? (
           <div className="text-dim text-sm py-16 text-center">配置参数范围后点「开始搜索」</div>
         ) : (
@@ -338,7 +338,7 @@ function GridTab() {
                 subtitle={`${results.length} 个组合 · ${tpl?.display_name} · ${symbol} ${bar} ${days}天`}
                 action={<Badge color="accent">最佳 {fmt(results[0][usedMetric] as number, 3)}</Badge>} />
               <div className="overflow-auto">
-                <table className="w-full text-xs">
+                <table className="w-full min-w-[640px] text-xs">
                   <thead>
                     <tr className="text-dim border-b border-line">
                       <th className="text-left px-3 py-2 font-medium">#</th>

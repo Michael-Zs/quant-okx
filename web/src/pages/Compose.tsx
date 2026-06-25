@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { DndContext, useDraggable, useDroppable, useSensor, useSensors, PointerSensor, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Trash2, Plus, Save } from 'lucide-react'
+import { GripVertical, Trash2, Plus, Save, ChevronRight } from 'lucide-react'
 import { api, openBacktestWS } from '../api/client'
 import type { StrategyInstance, StrategyGroup, NodeSpec, ChildRefSpec, BacktestMetrics } from '../api/types'
 import { Card, CardHeader, Button, Slider, Toggle, Select, Input, Field } from '../components/ui'
@@ -152,34 +152,44 @@ export default function Compose() {
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-      <div className="flex h-full">
+      <div className="flex flex-col md:flex-row md:h-full">
         {/* 左：单策略库 */}
-        <div className="w-64 shrink-0 border-r border-line p-4 overflow-auto">
-          <div className="text-sm font-semibold mb-1">单策略库</div>
-          <div className="text-xs text-dim mb-3">拖拽或点 + 添加到组合</div>
-          <div className="space-y-2">
-            {strategies.length === 0 && <div className="text-xs text-dim">先在「策略探索」保存单策略</div>}
-            {strategies.map((s) => <LibItem key={s.id} s={s} onAdd={() => addFromStrategy(s)} />)}
-          </div>
+        <div className="w-full md:w-64 md:shrink-0 border-b md:border-b-0 md:border-r border-line p-4 md:overflow-auto">
+          <details open className="mb-4 group">
+            <summary className="text-sm font-semibold cursor-pointer flex items-center gap-1.5 list-none [&::-webkit-details-marker]:hidden">
+              <ChevronRight size={14} className="text-dim transition-transform group-open:rotate-90" />
+              单策略库
+            </summary>
+            <div className="text-xs text-dim mt-2 mb-2">拖拽或点 + 添加（移动端点 +）</div>
+            <div className="space-y-2">
+              {strategies.length === 0 && <div className="text-xs text-dim">先在「策略探索」保存单策略</div>}
+              {strategies.map((s) => <LibItem key={s.id} s={s} onAdd={() => addFromStrategy(s)} />)}
+            </div>
+          </details>
 
-          <div className="text-sm font-semibold mt-6 mb-1">已保存策略组</div>
-          <div className="text-xs text-dim mb-3">点条目加载回画布编辑</div>
-          <div className="space-y-1">
-            {groups.length === 0 && <div className="text-xs text-dim">暂无</div>}
-            {groups.map((g) => (
-              <div key={g.id} className={`flex items-center gap-1 px-3 py-2 rounded bg-card border hover:border-accent/30 ${editingGroupId === g.id ? 'border-accent' : 'border-line'}`}>
-                <button onClick={() => loadGroup(g)} className="flex-1 min-w-0 text-left">
-                  <div className="text-sm truncate">{g.name}</div>
-                  <div className="text-[0.7rem] text-dim">{g.spec.node_type === 'allocation_group' ? '资金分配' : '信号组合'}</div>
-                </button>
-                <button onClick={() => removeGroup(g.id)} aria-label="删除策略组" className="text-dim hover:text-down shrink-0"><Trash2 size={14} /></button>
-              </div>
-            ))}
-          </div>
+          <details open className="group">
+            <summary className="text-sm font-semibold cursor-pointer flex items-center gap-1.5 list-none [&::-webkit-details-marker]:hidden">
+              <ChevronRight size={14} className="text-dim transition-transform group-open:rotate-90" />
+              已保存策略组
+            </summary>
+            <div className="text-xs text-dim mt-2 mb-2">点条目加载回画布编辑</div>
+            <div className="space-y-1">
+              {groups.length === 0 && <div className="text-xs text-dim">暂无</div>}
+              {groups.map((g) => (
+                <div key={g.id} className={`flex items-center gap-1 px-3 py-2 rounded bg-card border hover:border-accent/30 ${editingGroupId === g.id ? 'border-accent' : 'border-line'}`}>
+                  <button onClick={() => loadGroup(g)} className="flex-1 min-w-0 text-left">
+                    <div className="text-sm truncate">{g.name}</div>
+                    <div className="text-[0.7rem] text-dim">{g.spec.node_type === 'allocation_group' ? '资金分配' : '信号组合'}</div>
+                  </button>
+                  <button onClick={() => removeGroup(g.id)} aria-label="删除策略组" className="text-dim hover:text-down shrink-0"><Trash2 size={14} /></button>
+                </div>
+              ))}
+            </div>
+          </details>
         </div>
 
         {/* 中：组合画布 */}
-        <div className="flex-1 p-4 overflow-auto flex flex-col">
+        <div className="w-full md:flex-1 p-4 md:overflow-auto flex flex-col">
           <div className="flex items-center gap-3 mb-4">
             <div className="flex gap-1 p-1 bg-black/20 rounded-sm">
               {(['allocation_group', 'signal_combiner'] as const).map((t) => (
@@ -203,8 +213,8 @@ export default function Compose() {
             ))}
           </ComposeCanvas>
 
-          <div className="flex items-center gap-2 mt-4">
-            <Input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="策略组命名…" className="flex-1" />
+          <div className="flex flex-wrap items-center gap-2 mt-4">
+            <Input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="策略组命名…" className="flex-1 min-w-[10rem]" />
             <Button variant="primary" onClick={save} disabled={!groupName || children.length === 0}>
               <Save size={15} className="inline mr-1.5" />{editingGroupId ? '更新' : '保存策略组'}
             </Button>
@@ -217,7 +227,7 @@ export default function Compose() {
         </div>
 
         {/* 右：组合回测预览 */}
-        <div className="w-96 shrink-0 border-l border-line p-4 overflow-auto">
+        <div className="w-full md:w-96 md:shrink-0 border-b md:border-b-0 md:border-l border-line p-4 md:overflow-auto">
           <Card className="mb-4">
             <CardHeader title="回测参数" subtitle="预览用的行情上下文" />
             <div className="px-4 pb-4 space-y-3">
@@ -268,12 +278,12 @@ function LibItem({ s, onAdd }: { s: StrategyInstance; onAdd: () => void }) {
   return (
     <div ref={setNodeRef} {...attributes}
       className={`flex items-center gap-2 px-3 py-2 rounded bg-card border border-line hover:border-accent/30 cursor-grab ${isDragging ? 'opacity-40' : ''}`}>
-      <button {...listeners} aria-label="拖拽到组合" className="text-dim"><GripVertical size={14} /></button>
+      <button {...listeners} aria-label="拖拽到组合" className="text-dim hidden md:block cursor-grab"><GripVertical size={14} /></button>
       <div className="flex-1 min-w-0">
         <div className="text-sm truncate">{s.name}</div>
         <div className="text-[0.7rem] text-dim">{s.template_name}{s.strategy_kind === 'multi' ? ' · 多币' : ''}</div>
       </div>
-      <button onClick={onAdd} aria-label="添加到组合" className="text-dim hover:text-accent"><Plus size={15} /></button>
+      <button onClick={onAdd} aria-label="添加到组合" className="text-dim hover:text-accent p-1.5 -mr-1.5"><Plus size={16} /></button>
     </div>
   )
 }
@@ -287,8 +297,8 @@ function NodeCard({ child, pct, onChange, onRemove }: {
   return (
     <div ref={setNodeRef} style={style}
       className={`flex items-center gap-3 p-3 rounded bg-card border border-line ${isDragging ? 'border-accent shadow-accent' : ''}`}>
-      <button {...attributes} {...listeners} className="text-dim cursor-grab"><GripVertical size={16} /></button>
-      <div className="w-32 shrink-0">
+      <button {...attributes} {...listeners} className="text-dim cursor-grab hidden md:block"><GripVertical size={16} /></button>
+      <div className="w-24 md:w-32 shrink-0">
         <div className="text-sm font-medium truncate">{name}</div>
         <div className="text-[0.7rem] text-dim">{child.node.template_name}</div>
       </div>

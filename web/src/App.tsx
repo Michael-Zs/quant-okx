@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { Routes, Route, NavLink } from 'react-router-dom'
-import { LayoutDashboard, FlaskConical, Layers, Rocket, Bot, Activity, Settings as Cog } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Routes, Route, NavLink, useLocation } from 'react-router-dom'
+import { LayoutDashboard, FlaskConical, Layers, Rocket, Bot, Activity, Settings as Cog, Menu, X } from 'lucide-react'
 import { cn } from './lib/utils'
 import Dashboard from './pages/Dashboard'
 import Explore from './pages/Explore'
@@ -21,12 +21,52 @@ const nav = [
 ]
 
 export default function App() {
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const location = useLocation()
+
+  // 路由切换时关闭移动端抽屉
+  useEffect(() => { setSidebarOpen(false) }, [location.pathname])
+
+  // 抽屉打开时锁定 body 滚动，关闭/卸载时还原
+  useEffect(() => {
+    if (!sidebarOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [sidebarOpen])
+
   return (
-    <div className="min-h-screen flex">
-      <aside className="w-60 shrink-0 border-r border-line bg-black/20 p-4 flex flex-col gap-1 overflow-y-auto">
-        <div className="px-1 py-3 mb-2">
-          <div className="text-lg font-bold tracking-tight">量化控制台</div>
-          <div className="text-xs text-dim mt-0.5">OKX · 模块化策略</div>
+    <div className="min-h-screen md:flex">
+      {/* 移动端顶栏（桌面隐藏） */}
+      <header className="md:hidden sticky top-0 z-30 flex items-center gap-3 px-4 h-12 border-b border-line bg-bg/90 backdrop-blur">
+        <button onClick={() => setSidebarOpen(true)} aria-label="打开菜单" className="p-1.5 -ml-1.5 text-text hover:text-accent">
+          <Menu size={20} />
+        </button>
+        <div className="text-sm font-semibold tracking-tight">量化控制台</div>
+      </header>
+
+      {/* 移动端遮罩（仅抽屉打开时） */}
+      {sidebarOpen && (
+        <div onClick={() => setSidebarOpen(false)} className="md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" />
+      )}
+
+      {/* 侧边栏：桌面常驻 w-60 / 移动 fixed 抽屉 */}
+      <aside className={cn(
+        'border-line bg-black/20 p-4 flex flex-col gap-1 overflow-y-auto',
+        // 桌面：常驻、占文档流
+        'md:w-60 md:shrink-0 md:static md:translate-x-0 md:border-r',
+        // 移动：fixed 抽屉，默认移出视口
+        'fixed inset-y-0 left-0 z-50 w-72 max-w-[80vw] border-r transition-transform duration-200 ease-out',
+        sidebarOpen ? 'translate-x-0' : '-translate-x-full',
+      )}>
+        <div className="px-1 py-3 mb-2 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-lg font-bold tracking-tight">量化控制台</div>
+            <div className="text-xs text-dim mt-0.5">OKX · 模块化策略</div>
+          </div>
+          <button onClick={() => setSidebarOpen(false)} aria-label="关闭菜单" className="md:hidden text-dim hover:text-text shrink-0">
+            <X size={18} />
+          </button>
         </div>
         {nav.map(({ to, label, icon: Icon, desc, end }) => (
           <NavLink key={to} to={to} end={end} className={({ isActive }) =>
@@ -42,7 +82,9 @@ export default function App() {
           <TokenSetting />
         </div>
       </aside>
-      <main className="flex-1 overflow-auto">
+
+      {/* 主内容区：移动端随 body 自然滚动；桌面端独立滚动 */}
+      <main className="flex-1 md:h-screen md:overflow-auto">
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/explore" element={<Explore />} />

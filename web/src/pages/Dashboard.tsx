@@ -33,7 +33,7 @@ export default function Dashboard() {
   ]
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-4 md:p-6 max-w-6xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight">仪表盘</h1>
         <p className="text-sm text-dim mt-1">OKX 量化交易控制台 · 总览</p>

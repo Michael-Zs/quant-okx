@@ -91,8 +91,8 @@ export default function Multi() {
   })()
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-6 pt-5 pb-3 border-b border-line flex items-center justify-between">
+    <div className="flex flex-col md:h-full">
+      <div className="px-4 md:px-6 pt-4 md:pt-5 pb-3 border-b border-line flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
             <Activity size={20} className="text-accent" /> 多币策略
@@ -105,9 +105,9 @@ export default function Multi() {
         </button>
       </div>
 
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-col md:flex-row flex-1 min-h-0">
         {/* 左：配置 */}
-        <div className="w-80 shrink-0 border-r border-line p-4 overflow-auto">
+        <div className="w-full md:w-80 md:shrink-0 border-b md:border-b-0 md:border-r border-line p-4 md:overflow-auto">
           <Field label="策略" hint={isMulti ? '跨币策略：同时看多币择优' : '单币策略：在各币独立批量运行'}>
             <select value={sel} onChange={(e) => setSel(e.target.value)}
               className="w-full px-3 py-2 rounded-sm bg-black/30 border border-line text-sm text-text outline-none focus:border-accent">
@@ -153,7 +153,7 @@ export default function Multi() {
             <span className="text-xs text-dim">反转信号（1↔-1）</span>
             <Toggle checked={invert} onChange={setInvert} />
           </label>
-          <Button variant="primary" className="w-full" onClick={run} disabled={loading || universe.length < 2}>
+          <Button variant="primary" className="w-full py-2.5 md:py-2" onClick={run} disabled={loading || universe.length < 2}>
             <Play size={15} className="inline mr-1.5" />{loading ? '回测中…' : '组合回测'}
           </Button>
           {err && <div className="text-xs text-down mt-2 break-all">{err}</div>}
@@ -161,14 +161,14 @@ export default function Multi() {
           <div className="h-px bg-line my-4" />
           <div className="text-xs text-dim mb-2">保存为策略实例</div>
           <Input value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="命名（如：动量轮动_v1）…" className="w-full mb-2" />
-          <Button variant="secondary" className="w-full" onClick={save} disabled={!saveName || !tpl}>
+          <Button variant="secondary" className="w-full py-2.5 md:py-2" onClick={save} disabled={!saveName || !tpl}>
             <Save size={15} className="inline mr-1.5" />保存策略
           </Button>
           {msg && <div className="text-xs text-accent mt-2 break-all">{msg}</div>}
         </div>
 
         {/* 右：结果 */}
-        <div className="flex-1 overflow-auto p-4 space-y-4">
+        <div className="w-full md:flex-1 md:overflow-auto p-4 space-y-4">
           {!report ? (
             <div className="text-dim text-sm py-16 text-center">选好币种池与策略，点「组合回测」查看结果</div>
           ) : (
@@ -213,7 +213,7 @@ export default function Multi() {
               <Card>
                 <CardHeader title="各币种贡献明细" />
                 <div className="overflow-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full min-w-[560px] text-xs">
                     <thead>
                       <tr className="text-dim border-b border-line">
                         {['币种', '资金占比', '总收益', '最大回撤', '夏普', '胜率', '交易次数'].map((h, i) => (
