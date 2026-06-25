@@ -248,15 +248,25 @@ else
   # 优雅关掉旧 screen 会话（run_dev.sh 的 EXIT trap 会清理 8787/5173 端口）
   ssh "$REMOTE" "screen -S '${SCREEN_NAME}' -X quit 2>/dev/null; sleep 1; \
                  lsof -ti tcp:8787 2>/dev/null | xargs kill 2>/dev/null || true; sleep 1"
+  # 等待端口真正释放（TIME_WAIT 可能持续数秒）
+  for _ in 1 2 3 4 5; do
+    if ! ssh "$REMOTE" "lsof -ti tcp:8787 >/dev/null 2>&1"; then break; fi
+    sleep 1
+  done
   # 拉起新的 detached 会话。用【交互式登录 shell】启动：远端 npm/node 走 Homebrew/nvm，
   # 只在交互式 rc（.zshrc/.bashrc）里加进 PATH，非交互式 bash -lc 找不到 npm 会令 vite
   # 立即退出、整个 run_dev.sh 跟着死。LAUNCH_SHELL 默认 zsh（macOS 默认登录 shell）。
   LAUNCH_SHELL="${LAUNCH_SHELL:-zsh}"
   ssh "$REMOTE" "cd '$REMOTE_DIR' && screen -dmS '${SCREEN_NAME}' ${LAUNCH_SHELL} -lic '${START_CMD}'"
-  sleep 2
-  if ssh "$REMOTE" "screen -ls 2>/dev/null | grep -q '${SCREEN_NAME}'"; then
-    ok "screen『${SCREEN_NAME}』已重启（${START_CMD}）"
-  else
+  # run_dev.sh 内 kill_port 也会 sleep 2s，加上 API 启动需要时间 → 给够 5s
+  for _ in 1 2 3 4 5; do
+    sleep 1
+    if ssh "$REMOTE" "screen -ls 2>/dev/null | grep -q '${SCREEN_NAME}'"; then
+      ok "screen『${SCREEN_NAME}』已重启（${START_CMD}）"
+      break
+    fi
+  done
+  if ! ssh "$REMOTE" "screen -ls 2>/dev/null | grep -q '${SCREEN_NAME}'"; then
     die "screen 启动失败 —— 请手动检查（ssh $REMOTE 'screen -ls'）"
   fi
 fi
