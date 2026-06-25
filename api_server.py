@@ -1,4 +1,4 @@
-"""REST API 服务入口（FastAPI），绑 127.0.0.1，控制类接口需 X-API-Token。
+"""REST API 服务入口（FastAPI），默认绑 0.0.0.0（由 .env 的 API_HOST 控制），控制类接口需 X-API-Token。
 
 启动：python api_server.py   （或 uvicorn api_server:app）
 文档：http://127.0.0.1:8787/docs

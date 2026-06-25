@@ -19,7 +19,7 @@ class Settings:
 
     # REST API 鉴权
     API_TOKEN: str = os.getenv("API_TOKEN", "change_me")
-    API_HOST: str = os.getenv("API_HOST", "127.0.0.1")
+    API_HOST: str = os.getenv("API_HOST", "0.0.0.0")
     API_PORT: int = int(os.getenv("API_PORT", "8787"))
 
     # 默认交易参数
