@@ -11,6 +11,7 @@ from core.strategy.node import node_from_spec, NodeContext
 from core.data.cache import get_data
 from core.data.symbols import bars_per_year
 from core.backtest.engine import run_node, BacktestConfig
+from api.response_sampling import sample_curve
 
 router = APIRouter()
 
@@ -47,6 +48,7 @@ async def ws_backtest(ws: WebSocket):
                                      position_ratio=msg.get("position_ratio", 0.1),
                                      bars_per_year=bars_per_year(bar))
                 outcome = run_node(node, ctx, cfg)
+                max_pts = msg.get("max_points", 300)  # 默认 300 点，传 None 表示不采样
                 eq = outcome.equity_curve.copy()
                 if "ts" in eq.columns:
                     eq["ts"] = eq["ts"].astype(str)   # Timestamp → str，可 JSON 序列化
@@ -54,10 +56,10 @@ async def ws_backtest(ws: WebSocket):
                 if not outcome.benchmark_curve.empty:
                     bc = outcome.benchmark_curve.copy()
                     bc["ts"] = bc["ts"].astype(str)
-                    benchmark = bc.to_dict("list")
+                    benchmark = sample_curve(bc, "equity", max_pts)
                 await ws.send_json({
                     "metrics": _clean(outcome.metrics),
-                    "equity": eq.to_dict("list"),
+                    "equity": sample_curve(eq, "equity", max_pts),
                     "benchmark": benchmark,        # 同 symbol 1× 现货币 buy & hold，供叠加图
                     "report_kind": outcome.report_kind,
                     "n_trades": len(outcome.trades),

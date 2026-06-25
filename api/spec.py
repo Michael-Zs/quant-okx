@@ -57,7 +57,7 @@ curl -H "X-API-Token: $TOKEN" http://127.0.0.1:8787/api/balance?is_demo=true
 | `GET /api/deployments/{did}/state` | 部署实时状态（含 `balance` 可用余额 + `equity` 总权益） |
 | `GET /api/deployments/{did}/logs?n=50` | 部署事件日志 |
 | `GET /api/backtests?ref_id=&node_kind=&limit=50` | 回测历史列表 |
-| `GET /api/backtests/{bid}?with_equity=true&max_points=200` | 单次回测详情（含权益曲线，可采样） |
+| `GET /api/backtests/{bid}?with_equity=true&max_points=300` | 单次回测详情（含权益曲线，默认 300 点；传 0 则全量） |
 | `GET /api/balance?is_demo=true` ⚑ | 账户余额（返回 `balance` 可用 + `equity` 总权益） |
 | `GET /api/positions?is_demo=true&symbol=BTC-USDT-SWAP` ⚑ | 当前持仓（需 token） |
 
@@ -258,7 +258,7 @@ curl -X POST http://127.0.0.1:8787/api/multi_backtest \\
   -d '{"node_spec":{"node_type":"leaf","name":"mr","template_name":"momentum_rotation",
                      "strategy_kind":"multi","params":{"period":24,"top_k":1,"rebalance":24}},
        "symbols":["BTC-USDT-SWAP","ETH-USDT-SWAP","SOL-USDT-SWAP"],
-       "bar":"1H","days":180,"max_points":120,"response_mode":"compact",
+       "bar":"1H","days":180,"max_points":300,"response_mode":"compact",
        "allocation":{"BTC-USDT-SWAP":1.0,"ETH-USDT-SWAP":1.0,"SOL-USDT-SWAP":1.0}}'
 # → {metrics, equity:{ts,equity,sampled,...}, key_points, trade_summary,
 #     per_symbol:[{symbol,weight,metrics,...}], holdings:{ts,symbols,matrix,...}, initial_capital}

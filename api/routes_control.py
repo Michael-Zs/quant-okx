@@ -297,7 +297,7 @@ class MultiBacktestRequest(BaseModel):
     position_ratio: float = 0.1
     fee_rate: float = 0.0005
     slippage: float = 0.0005
-    max_points: Optional[int] = None
+    max_points: Optional[int] = 300
     response_mode: str = "full"
 
 
