@@ -1,6 +1,6 @@
 """WebSocket 路由：拖动参数/占比时的实时回测预览推送。
 
-前端在组合页拖动滑块时，发送 node_spec + 行情参数，服务端回测后推送 metrics + equity。
+前端在组合页拖动滑块时，发送 node_spec + 行情参数，服务端回测后推送 metrics + equity + benchmark。
 （当前为「请求-响应」式；引擎可后续改为流式 yield 中间权益做逐 K 线进度。）
 """
 import math
@@ -16,8 +16,16 @@ router = APIRouter()
 
 
 def _clean(d: dict) -> dict:
-    return {k: (None if isinstance(v, float) and (math.isinf(v) or math.isnan(v)) else v)
-            for k, v in d.items()}
+    """把 inf/NaN 转为 None，保证 JSON 可序列化。递归处理嵌套 dict（如 metrics.benchmark）。"""
+    out = {}
+    for k, v in d.items():
+        if isinstance(v, dict):
+            out[k] = _clean(v)
+        elif isinstance(v, float) and (math.isinf(v) or math.isnan(v)):
+            out[k] = None
+        else:
+            out[k] = v
+    return out
 
 
 @router.websocket("/ws/backtest")
@@ -42,9 +50,15 @@ async def ws_backtest(ws: WebSocket):
                 eq = outcome.equity_curve.copy()
                 if "ts" in eq.columns:
                     eq["ts"] = eq["ts"].astype(str)   # Timestamp → str，可 JSON 序列化
+                benchmark = None
+                if not outcome.benchmark_curve.empty:
+                    bc = outcome.benchmark_curve.copy()
+                    bc["ts"] = bc["ts"].astype(str)
+                    benchmark = bc.to_dict("list")
                 await ws.send_json({
                     "metrics": _clean(outcome.metrics),
                     "equity": eq.to_dict("list"),
+                    "benchmark": benchmark,        # 同 symbol 1× 现货币 buy & hold，供叠加图
                     "report_kind": outcome.report_kind,
                     "n_trades": len(outcome.trades),
                 })

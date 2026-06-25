@@ -33,6 +33,7 @@ curl -H "X-API-Token: $TOKEN" http://127.0.0.1:8787/api/balance?is_demo=true
 - **strategy_kind**：`single`（单币，一次一个品种）或 `multi`（多币，接收品种池做截面择优）。
 - **template_name**：策略在注册表里的 key（如 `ma_cross`、`rsi`、`momentum_rotation`），用 `GET /api/templates` 拿全量 + 参数 schema。
 - **指标字段**（`BacktestMetrics`）：`total_return / annual_return / max_drawdown / sharpe / sortino / calmar / volatility / win_rate / profit_factor / n_trades / final_capital`。收益率/回撤/胜率是小数（0.12 = 12%）。
+- **基准对比**（`metrics.benchmark`，可选子字典）：`beta / alpha（年化）/ correlation / tracking_error / information_ratio / excess_return`。基准 = 同 symbol 的 **1× 现货币 buy & hold**，用来区分策略是真有 alpha 还是只是跟大盘涨：`alpha>0` 才有 edge；`beta≈0` 说明基本对冲掉了大盘方向；`correlation≈1` 且 `alpha≈0` = 几乎只是跟大盘。
 
 > ⚠️ **余额 vs 权益**：API 返回两个字段——
 > - `balance`：**可用余额**（free USDT，不含已占用保证金）
@@ -139,6 +140,32 @@ curl -H "X-API-Token: $TOKEN" http://127.0.0.1:8787/api/balance?is_demo=true
 ```json
 {"group_id":"grp_xxx","weight":1.0,"invert":false}
 ```
+
+### 回测响应（POST /api/backtest）
+```jsonc
+{
+  "backtest_id": "bt_xxx",
+  "report_kind": "single",          // single | multi | group
+  "metrics": {
+    "total_return": 0.23, "annual_return": 0.41, "max_drawdown": 0.12,
+    "sharpe": 1.8, "sortino": 2.3, "calmar": 3.4, "volatility": 0.5,
+    "win_rate": 0.55, "profit_factor": 1.7, "n_trades": 42,
+    "final_capital": 12300.0,
+    "benchmark": {                  // 基准对比（1× 现货币 buy & hold）
+      "beta": 0.48,                 // 市场敞口：≈position_ratio*leverage=跟涨，≈0=对冲
+      "alpha": 0.15,                // 年化超额收益（剥除 beta 后真正的 edge）
+      "correlation": 0.82,          // 与基准走势的相关系数
+      "tracking_error": 0.35,       // 年化跟踪误差
+      "information_ratio": 0.43,    // 超额收益/跟踪误差（比 Sharpe 更看独立优势）
+      "excess_return": 0.09         // 总超额收益 = 策略总收益 - 基准总收益
+    }
+  },
+  "equity": {"ts":[...],"equity":[...],"sampled":false,...},
+  "benchmark": {"ts":[...],"equity":[...],...},  // 基准权益曲线（仅 full 模式；供前端叠加图）
+  "key_points": {...}, "trade_summary": {...}, "n_trades": 42
+}
+```
+> 绘制「策略 vs 基准」叠加图时，两条曲线初始资金不同（策略是加杠杆的），应**各自归一化到 1.0** 再画，视觉差 = 累计 alpha。`GET /api/backtests/{bid}?with_equity=true` 同样返回 `metrics.benchmark` 与 `benchmark` 曲线。
 
 ### 账户余额响应
 ```jsonc
@@ -315,7 +342,7 @@ ws.onopen = () => ws.send(JSON.stringify({
 }))
 ws.onmessage = (e) => {
   const d = JSON.parse(e.data)
-  // 成功：{metrics, equity:{ts,equity}, report_kind, n_trades}
+  // 成功：{metrics(含 benchmark), equity:{ts,equity}, benchmark:{ts,equity}|null, report_kind, n_trades}
   // 失败：{error: "..."}
 }
 ```

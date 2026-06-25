@@ -43,6 +43,8 @@ python scripts/trader_daemon.py --job runtime/jobs/<job_id>.json
 
 **回测引擎** `core/backtest/engine.py`：逐 K 线 mark-to-market（每根 K 线按 close 估算未实现盈亏、记录连续权益曲线），含手续费/滑点。仓位模型为**复利**：每次用 `cash * position_ratio * leverage` 作名义价值开仓，盈亏计入 cash。注意：**默认不建模爆仓**，高杠杆回测结果偏乐观。
 
+**基准对比**（`core/backtest/metrics.py` 的 `benchmark_metrics`）：每次回测额外算一条同 symbol 的 **1× 现货币 buy & hold** 基准权益，用来区分「策略真有 alpha」还是「只是跟大盘涨」——产出 `beta / alpha（年化）/ correlation / tracking_error / information_ratio / excess_return`，挂在 `metrics.benchmark`。`alpha>0` 才是真 edge；`beta≈0` = 基本对冲掉大盘方向。基准是**不加杠杆的现货**（经典 CAPM 口径），故 `beta` 直接读作市场敞口。基准权益曲线经 `BacktestReport.benchmark_curve` → `BacktestOutcome.benchmark_curve` → API 响应 `benchmark` 字段，落 backtests 表时并入权益 parquet 的额外列。
+
 **实盘进程模型**（`core/live/runtime.py` + `scripts/trader_daemon.py`）：
 - `start_job` 写 job 配置文件 → `subprocess.Popen(..., start_new_session=True)` 拉起独立 daemon 进程（脱离父进程组，关浏览器/重启控制台不死）。
 - daemon 每个周期（默认 3600s）调一次 `core/live/trader.py::run_once`：拉最新 K 线 → 取信号 → 对齐当前持仓 → 平旧仓/开新仓市价单 → 写 state 文件 + 追加 JSONL 日志。

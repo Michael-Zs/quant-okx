@@ -91,6 +91,15 @@ export interface Deployment {
   updated_at: string
 }
 
+export interface BenchmarkMetrics {
+  beta: number
+  alpha: number
+  correlation: number
+  tracking_error: number
+  information_ratio: number
+  excess_return: number
+}
+
 export interface BacktestMetrics {
   total_return: number
   annual_return: number
@@ -103,6 +112,7 @@ export interface BacktestMetrics {
   profit_factor: number | null
   n_trades: number
   final_capital: number
+  benchmark?: BenchmarkMetrics
 }
 
 // ---- 策略实验室 ----

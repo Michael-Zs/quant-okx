@@ -241,3 +241,52 @@ def test_grid_search_supports_multi_strategy_symbols(client, monkeypatch):
     assert data["count"] == 2
     assert "windows" in data["results"][0]
     assert "robust_score" in data["results"][0]
+
+
+def test_backtest_exposes_benchmark_metrics_and_curve(client, monkeypatch):
+    """单币回测必须返回基准对比指标 + 基准权益曲线，且可持久化后读回。"""
+    import api.routes_control as rc
+    monkeypatch.setattr(rc, "get_data", lambda symbol, bar, days: _dummy_ohlcv(64))
+
+    req = {
+        "node_spec": {"node_type": "leaf", "name": "ma", "template_name": "ma_cross",
+                      "strategy_kind": "single", "params": {"fast": 5, "slow": 20}},
+        "symbol": "BTC-USDT-SWAP", "bar": "1H", "days": 10,
+        "response_mode": "full", "max_points": 8,
+    }
+    r = client.post("/api/backtest", json=req, headers=H)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    # metrics.benchmark 子字典存在且含全部六个指标
+    bench = body["metrics"].get("benchmark")
+    assert bench is not None
+    for key in ("beta", "alpha", "correlation", "tracking_error",
+                "information_ratio", "excess_return"):
+        assert key in bench
+    # 基准权益曲线返回（与权益曲线同采样长度）
+    assert body["benchmark"]["returned_points"] == 8
+    assert body["benchmark"]["total_points"] == 64
+    # 持久化后 GET 能读回 benchmark 指标 + benchmark 采样曲线
+    bid = body["backtest_id"]
+    g = client.get(f"/api/backtests/{bid}?with_equity=true").json()
+    assert "benchmark" in g["metrics"]
+    assert "benchmark" in g                # 并入同一 parquet 的额外列，读取时单独采样
+    assert g["benchmark"]["returned_points"] == 64   # max_points=None → 不采样
+
+
+def test_multi_backtest_exposes_benchmark_curve(client, monkeypatch):
+    """多币回测返回组合层基准权益曲线。"""
+    import api.routes_control as rc
+    monkeypatch.setattr(rc, "get_data", lambda symbol, bar, days: _dummy_ohlcv(48))
+    req = {
+        "node_spec": {"node_type": "leaf", "name": "eq", "template_name": "equal_weight",
+                      "strategy_kind": "multi", "params": {}},
+        "symbols": ["BTC-USDT-SWAP", "ETH-USDT-SWAP"],
+        "bar": "1H", "days": 10, "max_points": 5, "response_mode": "compact",
+    }
+    r = client.post("/api/multi_backtest", json=req, headers=H)
+    assert r.status_code == 200
+    body = r.json()
+    assert "benchmark" in body["metrics"]
+    assert body["benchmark"] is not None
+    assert body["benchmark"]["returned_points"] == 5

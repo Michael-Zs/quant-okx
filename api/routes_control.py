@@ -57,7 +57,8 @@ def backtest(req: BacktestRequest):
     bid = R.save_backtest(node_kind=req.ref_kind or "adhoc", ref_id=req.ref_id,
                           spec=node.to_spec(), metrics=_clean(outcome.metrics),
                           cfg=asdict(cfg), symbol=",".join(symbols), bar=req.bar,
-                          days=req.days, equity_df=eq)
+                          days=req.days, equity_df=eq,
+                          benchmark_df=outcome.benchmark_curve)
     resp = {"backtest_id": bid, "report_kind": outcome.report_kind,
             "metrics": _clean(outcome.metrics), "n_trades": len(outcome.trades),
             "equity_start": float(eq["equity"].iloc[0]),
@@ -70,6 +71,10 @@ def backtest(req: BacktestRequest):
             "response_mode": req.response_mode}
     if req.response_mode == "full":
         resp["equity"] = sample_curve(eq, "equity", req.max_points)
+        # 基准（同 symbol buy & hold）权益曲线：供前端绘制叠加图区分 alpha / beta。
+        # 仅当后端计算出基准时返回（单 symbol / 多币 / 资金层组合都会产出）。
+        if not outcome.benchmark_curve.empty:
+            resp["benchmark"] = sample_curve(outcome.benchmark_curve, "equity", req.max_points)
     return resp
 
 
@@ -371,6 +376,9 @@ def _serialize_multi_report(rep, *, max_points: int | None, response_mode: str,
         ),
         "initial_capital": rep.initial_capital,
         "response_mode": response_mode,
+        # 组合层基准（各币 buy & hold 资金加权合成）权益曲线，供前端叠加对比。
+        "benchmark": (sample_curve(rep.benchmark_curve, "equity", max_points)
+                       if not rep.benchmark_curve.empty else None),
     }
 
 

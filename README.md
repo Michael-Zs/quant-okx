@@ -6,7 +6,7 @@
 
 ## ✨ 功能
 
-- **📊 数据与回测**：选品种/周期/天数 → 选策略调参 → 一键回测 → 全套 Plotly 可视化（K线+成交量+指标+买卖点、权益曲线、回撤、月度收益热力图、收益分布、交易明细、12 项指标卡片）。
+- **📊 数据与回测**：选品种/周期/天数 → 选策略调参 → 一键回测 → 全套可视化（权益曲线、回撤、交易明细、12+ 项指标卡片）。每次回测额外产出**基准对比**（alpha/beta/信息比率 vs 同 symbol 现货币 buy & hold），一眼看出策略是真有 edge 还是只是跟大盘涨。
 - **🧩 策略组合**：
   - *Ensemble*：多策略信号按 投票/多数/AND/OR/加权 合成「一个组合策略」。
   - *Portfolio*：每策略独立运行、按资金比例切分，合成组合权益。
@@ -74,7 +74,7 @@ api/      FastAPI REST 层（监控 GET 公开 / 控制 POST 需 token）
 core/     纯 Python 业务逻辑（可独立测试、被 API 调用）
   strategy/   Strategy 基类、注册表、Ensemble、Portfolio、内置策略、多币
   data/       OKX K线拉取 + K线 parquet/交易对 JSON 缓存 + symbol/周期转换
-  backtest/   逐K线 mark-to-market 引擎 + 指标 + 网格搜索
+  backtest/   逐K线 mark-to-market 引擎 + 指标（含 alpha/beta 基准对比） + 网格搜索
   live/       ccxt 交易所封装 + 单轮执行 + job/state 运行时
 scripts/  trader_daemon.py（独立后台进程入口）
 ```

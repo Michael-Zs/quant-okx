@@ -23,6 +23,7 @@ export default function Explore() {
   const [invert, setInvert] = useState(false)
   const [metrics, setMetrics] = useState<BacktestMetrics | null>(null)
   const [equity, setEquity] = useState<{ ts: string[]; equity: number[] } | null>(null)
+  const [benchmark, setBenchmark] = useState<{ ts: string[]; equity: number[] } | null>(null)
   const [saveName, setSaveName] = useState('')
   const [msg, setMsg] = useState('')
   const [specOpen, setSpecOpen] = useState(false)
@@ -49,6 +50,7 @@ export default function Explore() {
       if (d.metrics) {
         setMetrics(d.metrics as BacktestMetrics)
         setEquity(d.equity as { ts: string[]; equity: number[] })
+        setBenchmark((d.benchmark as { ts: string[]; equity: number[] }) ?? null)
       } else if (d.error) setMsg(String(d.error))
     })
     wsRef.current = ws
@@ -156,7 +158,7 @@ export default function Explore() {
         <Card>
           <CardHeader title="权益曲线"
             subtitle={tpl ? `${tpl.display_name} · ${symbol} ${bar} · ${days}天${invert ? ' · 反向' : ''}` : ''} />
-          <div className="px-4 pb-4"><EquityChart equity={equity} /></div>
+          <div className="px-4 pb-4"><EquityChart equity={equity} benchmark={benchmark} /></div>
         </Card>
         <div className="mt-4"><MetricsGrid m={metrics} /></div>
       </div>

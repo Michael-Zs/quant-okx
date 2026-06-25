@@ -178,6 +178,9 @@ def backtest_detail(bid: str, with_equity: bool = True, max_points: Optional[int
         eq = pd.DataFrame(bt["equity"])
         bt["key_points"] = summarize_equity(eq)
         bt["equity"] = sample_curve(eq, "equity", max_points)
+        # 旧文件无 benchmark 列时不返回；新回测会带上该列，供前端叠加绘制。
+        if "benchmark" in eq.columns:
+            bt["benchmark"] = sample_curve(eq, "benchmark", max_points)
     return bt
 
 
@@ -193,10 +196,12 @@ def job_state_legacy(job_id: str):
 
 
 def _clean(d: dict) -> dict:
-    """把 inf/NaN 转为 None，保证 JSON 可序列化。"""
+    """把 inf/NaN 转为 None，保证 JSON 可序列化。递归处理嵌套 dict（如 metrics.benchmark）。"""
     out = {}
     for k, v in d.items():
-        if isinstance(v, float) and (math.isinf(v) or math.isnan(v)):
+        if isinstance(v, dict):
+            out[k] = _clean(v)
+        elif isinstance(v, float) and (math.isinf(v) or math.isnan(v)):
             out[k] = None
         else:
             out[k] = v

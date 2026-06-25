@@ -253,8 +253,12 @@ def _decode_deployment(r) -> dict:
 
 def save_backtest(*, node_kind, spec: dict, metrics: dict, cfg: dict,
                   ref_id=None, symbol="", bar="", days=None,
-                  equity_df=None) -> str:
-    """保存回测结果。equity 曲线存 parquet 外存（表里存路径），避免主表膨胀。"""
+                  equity_df=None, benchmark_df=None) -> str:
+    """保存回测结果。equity 曲线存 parquet 外存（表里存路径），避免主表膨胀。
+
+    benchmark_df（可选，ts+equity）会作为额外的 benchmark 列并入同一 parquet，
+    供前端绘制「策略 vs 基准 buy & hold」叠加图。旧文件无该列时 get_backtest 自动缺省。
+    """
     bid = _new_id("bt")
     now = _now()
     equity_path = ""
@@ -262,7 +266,10 @@ def save_backtest(*, node_kind, spec: dict, metrics: dict, cfg: dict,
         bt_dir = settings.BACKTESTS_DIR
         bt_dir.mkdir(parents=True, exist_ok=True)   # 自保目录存在（不依赖 ensure_dirs 已跑）
         equity_path = str(bt_dir / f"{bid}.parquet")
-        equity_df.to_parquet(equity_path)
+        out = equity_df.copy()
+        if benchmark_df is not None and len(benchmark_df) and "equity" in benchmark_df.columns:
+            out = out.assign(benchmark=benchmark_df["equity"].to_numpy())
+        out.to_parquet(equity_path)
     with get_conn() as conn:
         conn.execute(
             "INSERT INTO backtests "

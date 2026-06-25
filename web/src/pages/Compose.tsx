@@ -23,6 +23,7 @@ export default function Compose() {
   const [msg, setMsg] = useState('')
   const [metrics, setMetrics] = useState<BacktestMetrics | null>(null)
   const [equity, setEquity] = useState<{ ts: string[]; equity: number[] } | null>(null)
+  const [benchmark, setBenchmark] = useState<{ ts: string[]; equity: number[] } | null>(null)
   // 回测预览参数（此前硬编码为 1H/180天/BTC）
   const [bar, setBar] = useState('1H')
   const [days, setDays] = useState(180)
@@ -35,8 +36,11 @@ export default function Compose() {
   useEffect(() => { api.instruments().then((r) => setInstruments(r.instruments)).catch(() => {}) }, [])
   useEffect(() => {
     const ws = openBacktestWS((d) => {
-      if (d.metrics) { setMetrics(d.metrics as BacktestMetrics); setEquity(d.equity as { ts: string[]; equity: number[] }) }
-      else if (d.error) setMsg(String(d.error))
+      if (d.metrics) {
+        setMetrics(d.metrics as BacktestMetrics)
+        setEquity(d.equity as { ts: string[]; equity: number[] })
+        setBenchmark((d.benchmark as { ts: string[]; equity: number[] }) ?? null)
+      } else if (d.error) setMsg(String(d.error))
     })
     wsRef.current = ws
     return () => ws.close()
@@ -172,7 +176,7 @@ export default function Compose() {
           <Card>
             <CardHeader title="组合回测预览"
               subtitle={`${symbols.join(', ')} · ${bar} · ${days}天`} />
-            <div className="px-4 pb-4"><EquityChart equity={equity} /></div>
+            <div className="px-4 pb-4"><EquityChart equity={equity} benchmark={benchmark} /></div>
           </Card>
           <div className="mt-4"><MetricsGrid m={metrics} /></div>
         </div>
