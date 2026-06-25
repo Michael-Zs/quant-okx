@@ -145,6 +145,7 @@ def stop_deployment_route(did: str):
 @router.delete("/deployments/{did}")
 def delete_deployment_route(did: str):
     Rt.stop_deployment(did)
+    Rt.delete_job(did)   # 清理 runtime/jobs state logs 文件，避免僵尸残留
     return {"deployment_id": did, "deleted": R.delete_deployment(did)}
 
 
