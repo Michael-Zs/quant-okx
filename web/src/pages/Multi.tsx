@@ -83,7 +83,9 @@ export default function Multi() {
     return Array.from({ length: n }, (_, i) => {
       const row: Record<string, number | string> = { i }
       row['组合'] = report.equity.equity[i]
-      for (const p of report.per_symbol) row[p.symbol.split('-')[0]] = p.equity[i]
+      for (const p of report.per_symbol) {
+        if (p.equity) row[p.symbol.split('-')[0]] = p.equity[i]
+      }
       return row
     })
   })()

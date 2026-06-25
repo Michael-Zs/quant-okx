@@ -355,7 +355,7 @@ function GridTab() {
                     {results.slice(0, 50).map((r, i) => (
                       <tr key={i} className={`border-b border-line/40 hover:bg-card ${i === 0 ? 'bg-accent/5' : ''}`}>
                         <td className="px-3 py-1.5 text-dim">{i + 1}</td>
-                        {keys.map((k) => <td key={k} className="px-3 py-1.5 font-mono">{r[k]}</td>)}
+                        {keys.map((k) => <td key={k} className="px-3 py-1.5 font-mono">{typeof r[k] === 'number' || typeof r[k] === 'string' ? r[k] : ''}</td>)}
                         <td className={`px-3 py-1.5 text-right tnum ${r.total_return >= 0 ? 'text-up' : 'text-down'}`}>{pct(r.total_return)}</td>
                         <td className="px-3 py-1.5 text-right tnum">{fmt(r.sharpe)}</td>
                         <td className="px-3 py-1.5 text-right tnum text-down">{pct(r.max_drawdown)}</td>

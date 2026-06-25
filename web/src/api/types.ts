@@ -114,7 +114,7 @@ export interface UserStrategy {
 }
 
 export interface GridSearchResult {
-  [param: string]: number | string | Record<string, BacktestMetrics>
+  [param: string]: number | string | Record<string, BacktestMetrics> | undefined
   total_return: number
   sharpe: number
   max_drawdown: number
