@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Rocket, Play, Square, Trash2, Plus } from 'lucide-react'
+import { Rocket, Play, Square, Trash2, Plus, TrendingUp } from 'lucide-react'
 import { api } from '../api/client'
-import type { StrategyGroup, Deployment } from '../api/types'
+import type { StrategyGroup, Deployment, BacktestMetrics, SampledSeries, NodeSpec } from '../api/types'
 import { Card, CardHeader, Button, Slider, Toggle, Select, Input, Field, Badge } from '../components/ui'
+import { EquityChart, MetricsGrid } from '../components/charts'
 import { MultiSymbolPicker } from '../components/SymbolPicker'
 import { fmt } from '../lib/utils'
 
@@ -22,6 +23,11 @@ export default function Deploy() {
   const [monitorId, setMonitorId] = useState('')
   const [state, setState] = useState<Record<string, unknown> | null>(null)
   const [logs, setLogs] = useState<Record<string, unknown>[]>([])
+  const [editingDeployId, setEditingDeployId] = useState<string | null>(null)
+  const [btResult, setBtResult] = useState<{ metrics: BacktestMetrics; equity?: SampledSeries; benchmark?: SampledSeries; n_trades?: number } | null>(null)
+  const [btLoading, setBtLoading] = useState(false)
+  const [btDays, setBtDays] = useState(180)
+  const [btCollapsed, setBtCollapsed] = useState(false)
 
   useEffect(() => {
     refresh()
@@ -42,19 +48,64 @@ export default function Deploy() {
     setSel((s) => { const n = { ...s }; delete n[gid]; return n })
   }
 
-  async function create() {
+  function loadDeployment(d: Deployment) {
+    setEditingDeployId(d.id)
+    setMonitorId(d.id)
+    setName(d.name); setIsDemo(d.is_demo); setBar(d.bar); setSymbols(d.symbols)
+    setLeverage(d.leverage); setPositionRatio(d.position_ratio); setInitialCapital(d.initial_capital)
+    const next: Record<string, { weight: number; invert: boolean }> = {}
+    for (const g of d.groups) next[g.group_id] = { weight: g.weight, invert: g.invert }
+    setSel(next)
+    setBtResult(null); setMsg('')
+  }
+
+  function newDeploy() {
+    setEditingDeployId(null); setMonitorId('')
+    setName(''); setSel({})
+    setIsDemo(true); setBar('1H'); setSymbols(['BTC-USDT-SWAP'])
+    setLeverage(5); setPositionRatio(0.1); setInitialCapital(10000)
+    setBtResult(null); setMsg('')
+  }
+
+  async function save() {
     const groupRefs = Object.entries(sel).map(([gid, v]) => ({ group_id: gid, weight: v.weight, invert: v.invert }))
     if (!name || groupRefs.length === 0) { setMsg('需命名且选至少一组'); return }
     try {
-      const d = await api.createDeployment({
-        name, is_demo: isDemo, bar,
-        symbols,
-        groups: groupRefs, leverage, position_ratio: positionRatio, initial_capital: initialCapital,
-      })
+      const payload = { name, is_demo: isDemo, bar, symbols,
+        groups: groupRefs, leverage, position_ratio: positionRatio, initial_capital: initialCapital }
+      if (editingDeployId) {
+        await api.updateDeployment(editingDeployId, payload)
+        setMsg(`✓ 已更新部署「${name}」`)
+      } else {
+        const d = await api.createDeployment(payload)
+        setEditingDeployId(d.id); setMonitorId(d.id)
+        setMsg(`✓ 部署「${name}」已创建 (id: ${d.id})`)
+      }
       await refresh()
-      setMsg(`✓ 部署「${name}」已创建 (id: ${d.id})`)
-      setName('')
     } catch (e) { setMsg((e as Error).message) }
+  }
+
+  async function runBacktest() {
+    if (Object.keys(sel).length === 0) { setMsg('请先选择至少一个策略组'); return }
+    setBtLoading(true); setMsg('')
+    try {
+      const common = { symbols, bar, leverage, position_ratio: positionRatio,
+        initial_capital: initialCapital, days: btDays, response_mode: 'full' as const }
+      let r
+      if (editingDeployId) {
+        r = await api.backtest({ ref_kind: 'deployment', ref_id: editingDeployId, ...common })
+      } else {
+        // 新建态：把当前所选组就地组装成 allocation_group node_spec 回测
+        const children = Object.entries(sel)
+          .map(([gid, v]) => ({ node: groups.find((g) => g.id === gid)?.spec, weight: v.weight, invert: v.invert }))
+          .filter((c): c is { node: NodeSpec; weight: number; invert: boolean } => !!c.node)
+        const node_spec: NodeSpec = { node_type: 'allocation_group', name: name || 'preview', invert: false, children }
+        r = await api.backtest({ node_spec, ...common })
+      }
+      setBtResult(r as { metrics: BacktestMetrics; equity?: SampledSeries; benchmark?: SampledSeries; n_trades?: number })
+      setBtCollapsed(false)
+    } catch (e) { setMsg((e as Error).message) }
+    finally { setBtLoading(false) }
   }
 
   async function start(id: string) { await api.startDeployment(id); setTimeout(refresh, 600); setMonitorId(id) }
@@ -99,7 +150,7 @@ export default function Deploy() {
         <div className="text-sm font-semibold mb-2">已部署</div>
         <div className="space-y-1">
           {deployments.map((d) => (
-            <div key={d.id} onClick={() => setMonitorId(d.id)}
+            <div key={d.id} onClick={() => loadDeployment(d)}
               className={`px-3 py-2 rounded border cursor-pointer ${monitorId === d.id ? 'border-accent bg-card-strong' : 'border-line bg-card hover:bg-card-strong'}`}>
               <div className="flex items-center justify-between">
                 <span className="text-sm truncate">{d.name}</span>
@@ -113,7 +164,10 @@ export default function Deploy() {
 
       {/* 中：部署配置 */}
       <div className="w-80 shrink-0 border-r border-line p-4 overflow-auto">
-        <div className="text-base font-semibold mb-3 flex items-center gap-2"><Rocket size={18} /> 新建部署</div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-base font-semibold flex items-center gap-2"><Rocket size={18} />{editingDeployId ? '编辑部署' : '新建部署'}</div>
+          {editingDeployId && <button onClick={newDeploy} className="text-xs text-accent hover:underline">+ 新建</button>}
+        </div>
         <Field label="部署名称"><Input value={name} onChange={(e) => setName(e.target.value)} className="w-full" /></Field>
         <div className="grid grid-cols-2 gap-2 mt-3">
           <Field label="模式">
@@ -156,12 +210,38 @@ export default function Deploy() {
           })}
           {Object.keys(sel).length === 0 && <div className="text-xs text-dim">从左侧选策略组</div>}
         </div>
-        <Button variant="primary" className="w-full mt-4" onClick={create}><Plus size={15} className="inline mr-1.5" />创建部署</Button>
+        <Field label="回测天数" hint="部署本身是实盘；此处仅用于历史回测预览">
+          <Input type="number" value={btDays} onChange={(e) => setBtDays(+e.target.value)} className="w-full" />
+        </Field>
+        <div className="grid grid-cols-2 gap-2 mt-3">
+          <Button variant="primary" onClick={save}><Plus size={15} className="inline mr-1.5" />{editingDeployId ? '更新部署' : '创建部署'}</Button>
+          <Button variant="ghost" onClick={runBacktest} disabled={btLoading}><TrendingUp size={15} className="inline mr-1.5" />{btLoading ? '回测中…' : '回测预览'}</Button>
+        </div>
+        {editingDeployId && deployments.find((d) => d.id === editingDeployId)?.alive && (
+          <div className="text-[0.7rem] text-accent mt-2">部署运行中：修改需停止再启动才生效</div>
+        )}
         {msg && <div className="text-xs text-accent mt-2 break-all">{msg}</div>}
       </div>
 
       {/* 右：监控 */}
       <div className="flex-1 p-4 overflow-auto">
+        {btResult && (
+          <Card className="mb-4">
+            <div className="flex items-center justify-between px-4 pt-4">
+              <div>
+                <div className="text-sm font-semibold">📈 回测预览</div>
+                <div className="text-[0.7rem] text-dim">{symbols.join(', ')} · {bar} · {btDays}天{editingDeployId ? '' : ' · 未保存配置'}</div>
+              </div>
+              <button onClick={() => setBtCollapsed((c) => !c)} className="text-xs text-dim hover:text-accent">{btCollapsed ? '展开' : '收起'}</button>
+            </div>
+            {!btCollapsed && (
+              <>
+                <div className="px-4 pb-4"><EquityChart equity={btResult.equity ?? null} benchmark={btResult.benchmark ?? null} /></div>
+                <div className="px-4 pb-4"><MetricsGrid m={btResult.metrics} /></div>
+              </>
+            )}
+          </Card>
+        )}
         {monitorId && monitored ? (
           <>
             <div className="flex items-center justify-between mb-3">
@@ -203,7 +283,7 @@ export default function Deploy() {
             </Card>
           </>
         ) : (
-          <div className="text-dim text-sm py-20 text-center">选择左侧部署查看实时监控</div>
+          <div className="text-dim text-sm py-20 text-center">{btResult ? '' : '选择左侧部署查看实时监控，或点「回测预览」'}</div>
         )}
       </div>
     </div>

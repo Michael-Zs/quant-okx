@@ -91,6 +91,20 @@ def _build_node(req: BacktestRequest):
             if not g:
                 raise KeyError(f"未知策略组: {req.ref_id}")
             return node_from_spec(g["spec"])
+        if req.ref_kind == "deployment":
+            # 部署 = 多个策略组的资金层组合：把每组引用解析成 node，包成一个
+            # allocation_group，交给 run_node → run_group 复用资金层组合回测。
+            d = R.get_deployment(req.ref_id)
+            if not d:
+                raise KeyError(f"未知部署: {req.ref_id}")
+            children = []
+            for gref in d["groups"]:
+                g = R.get_group(gref["group_id"])
+                if not g:
+                    raise KeyError(f"部署引用了不存在的策略组: {gref['group_id']}")
+                children.append({"node": g["spec"], "weight": gref["weight"], "invert": gref["invert"]})
+            return node_from_spec({"node_type": "allocation_group", "name": d["name"],
+                                   "children": children, "invert": False})
         raise ValueError(f"未知 ref_kind: {req.ref_kind}")
     if req.node_spec:
         return node_from_spec(req.node_spec)
@@ -119,8 +133,7 @@ def create_deployment(req: DeploymentCreate):
 def update_deployment(did: str, req: DeploymentUpdate):
     init_db()
     fields = {k: v for k, v in req.model_dump(exclude_unset=True).items() if v is not None}
-    if "groups" in fields:
-        fields["groups"] = [g.model_dump() for g in fields["groups"]]
+    # groups 经 model_dump 已是 list[dict]（GroupRefSpec 已递归序列化），直接落库即可
     if "bar" in fields:
         fields["check_interval_sec"] = _BAR_INTERVAL.get(fields["bar"], 3600)
     if not R.update_deployment(did, **fields):

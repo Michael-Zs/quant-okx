@@ -4,7 +4,7 @@ import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } 
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Trash2, Plus, Save } from 'lucide-react'
 import { api, openBacktestWS } from '../api/client'
-import type { StrategyInstance, NodeSpec, ChildRefSpec, BacktestMetrics } from '../api/types'
+import type { StrategyInstance, StrategyGroup, NodeSpec, ChildRefSpec, BacktestMetrics } from '../api/types'
 import { Card, CardHeader, Button, Slider, Toggle, Select, Input, Field } from '../components/ui'
 import { EquityChart, MetricsGrid } from '../components/charts'
 import { MultiSymbolPicker } from '../components/SymbolPicker'
@@ -20,6 +20,8 @@ export default function Compose() {
   const [mode, setMode] = useState('vote')
   const [children, setChildren] = useState<EditChild[]>([])
   const [groupName, setGroupName] = useState('')
+  const [groups, setGroups] = useState<StrategyGroup[]>([])
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null)
   const [msg, setMsg] = useState('')
   const [metrics, setMetrics] = useState<BacktestMetrics | null>(null)
   const [equity, setEquity] = useState<{ ts: string[]; equity: number[] } | null>(null)
@@ -33,6 +35,7 @@ export default function Compose() {
   const { refreshGroups } = useStore()
 
   useEffect(() => { api.listStrategies().then((r) => setStrategies(r.strategies)) }, [])
+  useEffect(() => { api.listGroups().then((r) => setGroups(r.groups)).catch(() => {}) }, [])
   useEffect(() => { api.instruments().then((r) => setInstruments(r.instruments)).catch(() => {}) }, [])
   useEffect(() => {
     const ws = openBacktestWS((d) => {
@@ -94,13 +97,52 @@ export default function Compose() {
     }
   }
 
+  async function reloadGroups() {
+    try { const r = await api.listGroups(); setGroups(r.groups) } catch { /* ignore */ }
+  }
+
   async function save() {
     if (!groupName || children.length === 0) return
     try {
-      await api.createGroup({ name: groupName, spec: buildSpec() })
+      if (editingGroupId) {
+        await api.updateGroup(editingGroupId, { name: groupName, spec: buildSpec() })
+        setMsg(`✓ 已更新策略组「${groupName}」`)
+      } else {
+        const g = await api.createGroup({ name: groupName, spec: buildSpec() })
+        setEditingGroupId(g.id)
+        setMsg(`✓ 已保存策略组「${groupName}」`)
+      }
+      await reloadGroups()
+      await refreshGroups()      // 同步全局 store（Deploy 等页面用）
+    } catch (e) { setMsg((e as Error).message) }
+  }
+
+  function loadGroup(g: StrategyGroup) {
+    const spec = g.spec
+    setEditingGroupId(g.id)
+    setGroupType(spec.node_type === 'signal_combiner' ? 'signal_combiner' : 'allocation_group')
+    setMode(spec.mode ?? 'vote')
+    setGroupName(spec.name ?? g.name)
+    setChildren((spec.children ?? []).map((c) => ({ _id: uid(), node: c.node, weight: c.weight, invert: c.invert })))
+    setMsg(`已加载「${g.name}」，修改后点「更新」保存`)
+  }
+
+  function newGroup() {
+    setEditingGroupId(null)
+    setChildren([])
+    setGroupName('')
+    setGroupType('allocation_group')
+    setMode('vote')
+    setMsg('')
+  }
+
+  async function removeGroup(gid: string) {
+    try {
+      await api.deleteGroup(gid)
+      if (editingGroupId === gid) newGroup()
+      await reloadGroups()
       await refreshGroups()
-      setMsg(`✓ 已保存策略组「${groupName}」`)
-      setGroupName('')
+      setMsg('✓ 已删除策略组')
     } catch (e) { setMsg((e as Error).message) }
   }
 
@@ -118,6 +160,21 @@ export default function Compose() {
           <div className="space-y-2">
             {strategies.length === 0 && <div className="text-xs text-dim">先在「策略探索」保存单策略</div>}
             {strategies.map((s) => <LibItem key={s.id} s={s} onAdd={() => addFromStrategy(s)} />)}
+          </div>
+
+          <div className="text-sm font-semibold mt-6 mb-1">已保存策略组</div>
+          <div className="text-xs text-dim mb-3">点条目加载回画布编辑</div>
+          <div className="space-y-1">
+            {groups.length === 0 && <div className="text-xs text-dim">暂无</div>}
+            {groups.map((g) => (
+              <div key={g.id} className={`flex items-center gap-1 px-3 py-2 rounded bg-card border hover:border-accent/30 ${editingGroupId === g.id ? 'border-accent' : 'border-line'}`}>
+                <button onClick={() => loadGroup(g)} className="flex-1 min-w-0 text-left">
+                  <div className="text-sm truncate">{g.name}</div>
+                  <div className="text-[0.7rem] text-dim">{g.spec.node_type === 'allocation_group' ? '资金分配' : '信号组合'}</div>
+                </button>
+                <button onClick={() => removeGroup(g.id)} aria-label="删除策略组" className="text-dim hover:text-down shrink-0"><Trash2 size={14} /></button>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -149,9 +206,13 @@ export default function Compose() {
           <div className="flex items-center gap-2 mt-4">
             <Input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="策略组命名…" className="flex-1" />
             <Button variant="primary" onClick={save} disabled={!groupName || children.length === 0}>
-              <Save size={15} className="inline mr-1.5" />保存策略组
+              <Save size={15} className="inline mr-1.5" />{editingGroupId ? '更新' : '保存策略组'}
             </Button>
+            {editingGroupId && (
+              <Button variant="ghost" onClick={newGroup}><Plus size={15} className="inline mr-1" />新建</Button>
+            )}
           </div>
+          {editingGroupId && <div className="text-[0.7rem] text-dim mt-1">正在编辑已保存的策略组</div>}
           {msg && <div className="text-xs text-accent mt-2 break-all">{msg}</div>}
         </div>
 

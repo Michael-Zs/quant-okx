@@ -49,6 +49,8 @@ export const api = {
   listDeployments: () => req<{ deployments: Deployment[] }>('/deployments'),
   createDeployment: (data: Record<string, unknown>) =>
     req<Deployment>('/deployments', { method: 'POST', body: JSON.stringify(data) }),
+  updateDeployment: (id: string, data: Record<string, unknown>) =>
+    req<Deployment>(`/deployments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   startDeployment: (id: string) => req<{ deployment_id: string; status: string }>(`/deployments/${id}/start`, { method: 'POST' }),
   stopDeployment: (id: string) => req<{ deployment_id: string; stopped: boolean }>(`/deployments/${id}/stop`, { method: 'POST' }),
   deleteDeployment: (id: string) => req(`/deployments/${id}`, { method: 'DELETE' }),
