@@ -152,16 +152,21 @@ def run_once_cycle(demo_ex, live_ex) -> dict:
     demo_intents = [it for it in intents if it.get("is_demo") is not False]
     live_intents = [it for it in intents if it.get("is_demo") is False]
 
-    import time
-    result = {
-        "demo": reconcile_and_trade(demo_ex, demo_intents) if demo_ex else {"error": "模拟盘 exchange 未配置"},
-        "live": reconcile_and_trade(live_ex, live_intents) if live_ex else {"error": "实盘 exchange 未配置"},
-        "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
-    }
+    def _reconcile_group(ex, group_intents: list[dict], label: str) -> dict:
+        if ex is None:
+            return {"error": f"{label} exchange 未配置"}
+        if not group_intents:
+            # fail-safe：无 intent（部署中 / 全部停止 / executor 启动早于 daemon 第一轮）
+            # 时【不平仓】，避免误平账户现有仓位。停止单个部署的平仓由"非空 intent 下
+            # intents ∪ 持仓对账"机制处理（该部署 symbol 从 target 消失但账户仍有仓 → 对账平掉）。
+            return {"status": "waiting_for_intents", "n_intents": 0,
+                    "equity": round(get_equity(ex), 2)}
+        return reconcile_and_trade(ex, group_intents)
 
-    # 补充统计
-    result["deployment_count"] = {
-        "demo": len(demo_intents),
-        "live": len(live_intents),
+    import time
+    return {
+        "demo": _reconcile_group(demo_ex, demo_intents, "模拟盘"),
+        "live": _reconcile_group(live_ex, live_intents, "实盘"),
+        "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "deployment_count": {"demo": len(demo_intents), "live": len(live_intents)},
     }
-    return result

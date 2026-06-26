@@ -248,6 +248,11 @@ PYEOF
 "
     ok "实盘 daemon 已重启"
 
+    # 等 daemon 写出第一个 intent 再启动 executor。executor 侧已 fail-safe（空 intent 时
+    # 跳过不平仓），这里的 sleep 是让 executor 首轮就有 intent、正常对账，而不是空转一轮（60s）。
+    echo "  等待 daemon 写出 intent（15s）..."
+    sleep 15
+
     # 重启 executor（同 daemon，独立进程需单独重启）
     echo "  重启 executor daemon..."
     ssh "$REMOTE" "cd '${REMOTE_DIR}' && $PY -c 'import sys,os; sys.path.insert(0, os.getcwd()); from core.executor.manager import stop_executor, start_executor; print("  · stop executor", flush=True); stop_executor(); import time; time.sleep(1); print("  · start executor", flush=True); start_executor(); print("executor done")'"

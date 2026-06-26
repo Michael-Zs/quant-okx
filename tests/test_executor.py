@@ -425,3 +425,19 @@ class TestRunOnceCycle:
         assert "demo" in result
         # 应该加载到刚写的 intent
         assert result["deployment_count"]["demo"] >= 1
+
+    def test_empty_intents_waits_doesnt_flatten(self):
+        """fail-safe：整组无 intent 时跳过对账，不平掉账户现有仓位。
+
+        部署/重启时序中 executor 可能早于 daemon 第一个 intent 启动，
+        此时绝不能把账户现有仓位误判为"目标 0"全平。
+        """
+        ex = FakeExchange(equity=10000)
+        ex.positions = {
+            "BTC-USDT-SWAP": {"dir": 1, "contracts": 0.2, "entry_price": 50000, "unrealized_pnl": 0},
+        }
+        for p in settings.INTENTS_DIR.glob("*.json"):  # 清空 intents
+            p.unlink()
+        result = run_once_cycle(demo_ex=ex, live_ex=None)
+        assert result["demo"]["status"] == "waiting_for_intents"
+        assert len(ex.orders) == 0  # 没有平仓单
