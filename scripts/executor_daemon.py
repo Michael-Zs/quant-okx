@@ -18,6 +18,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import core.utils.okx_dns  # noqa: F401  国内 DNS 污染绕行（必须在 ccxt/OKX 调用前 import）
+
 from core.utils.config import settings
 from core.live.runtime import write_json_atomic, state_path, append_log
 from core.executor.engine import run_once_cycle

@@ -9,6 +9,8 @@ import time
 import requests
 import pandas as pd
 
+import core.utils.okx_dns  # noqa: F401  国内 DNS 污染绕行（www.okx.com → 真实 IP），必须在任何 OKX 请求前
+
 BASE_URL = "https://www.okx.com"
 
 
