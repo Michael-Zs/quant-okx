@@ -5,6 +5,7 @@ import type { StrategyGroup, Deployment, BacktestMetrics, SampledSeries, NodeSpe
 import { Card, CardHeader, Button, Slider, Toggle, Select, Input, Field, Badge } from '../components/ui'
 import { EquityChart, MetricsGrid } from '../components/charts'
 import { MultiSymbolPicker } from '../components/SymbolPicker'
+import { AllocationSlider } from '../components/AllocationSlider'
 import { fmt } from '../lib/utils'
 
 export default function Deploy() {
@@ -30,6 +31,8 @@ export default function Deploy() {
   const [btDays, setBtDays] = useState(180)
   const [btCollapsed, setBtCollapsed] = useState(false)
   const [executorState, setExecutorState] = useState<ExecutorState | null>(null)
+  const [allocWeights, setAllocWeights] = useState<Record<string, number>>({})
+  const [allocMsg, setAllocMsg] = useState('')
 
   useEffect(() => {
     refresh()
@@ -145,6 +148,25 @@ export default function Deploy() {
     return () => { stopped = true; clearInterval(t) }
   }, [])
 
+  // running 部署的资金份额（归一化 Σ=1），随 deployments 变化重新初始化
+  const runningDeployments = deployments.filter((d) => d.alive)
+  useEffect(() => {
+    if (runningDeployments.length === 0) { setAllocWeights({}); return }
+    const raw = runningDeployments.map((d) => d.capital_weight ?? 1.0)
+    const sum = raw.reduce((s, w) => s + w, 0)
+    const next: Record<string, number> = {}
+    runningDeployments.forEach((d, i) => { next[d.id] = sum > 0 ? raw[i] / sum : 1 / runningDeployments.length })
+    setAllocWeights(next)
+  }, [deployments])
+
+  async function applyAlloc() {
+    try {
+      await Promise.all(runningDeployments.map((d) => api.updateDeployment(d.id, { capital_weight: allocWeights[d.id] })))
+      setAllocMsg(`✓ 已应用到 ${runningDeployments.length} 个部署（下个周期生效）`)
+      await refresh()
+    } catch (e) { setAllocMsg((e as Error).message) }
+  }
+
   const totalW = Object.values(sel).reduce((s, v) => s + v.weight, 0) || 1
   const positions = (state?.positions ?? {}) as Record<string, Record<string, number>>
   const actions = (state?.actions ?? []) as string[]
@@ -259,6 +281,27 @@ export default function Deploy() {
 
       {/* 右：监控 */}
       <div className="w-full md:flex-1 p-4 md:overflow-auto">
+        {runningDeployments.length > 0 && (
+          <Card className="mb-4">
+            <CardHeader title="资金份额分配" subtitle={`在跑的 ${runningDeployments.length} 个部署之间分账户权益（Σ=100%）`} />
+            <div className="p-4 pt-2">
+              <AllocationSlider
+                items={runningDeployments.map((d) => ({ id: d.id, label: d.name }))}
+                weights={runningDeployments.map((d) => allocWeights[d.id] ?? 0)}
+                onChange={(w) => {
+                  const next = { ...allocWeights }
+                  runningDeployments.forEach((d, i) => { next[d.id] = w[i] })
+                  setAllocWeights(next)
+                  setAllocMsg('')
+                }}
+              />
+              <div className="flex items-center gap-3 mt-3">
+                <Button variant="primary" onClick={applyAlloc}>应用份额</Button>
+                {allocMsg && <span className="text-xs text-accent">{allocMsg}</span>}
+              </div>
+            </div>
+          </Card>
+        )}
         {btResult && (
           <Card className="mb-4">
             <div className="flex items-center justify-between px-4 pt-4">
