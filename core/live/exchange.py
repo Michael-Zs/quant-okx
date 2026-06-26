@@ -42,9 +42,12 @@ def get_equity(ex, quote: str = "USDT") -> float:
     for currency, amount in (bal.get("total") or {}).items():
         if currency == quote or not amount or float(amount) == 0:
             continue
-        ticker = ex.fetch_ticker(f"{currency}/{quote}")
-        if ticker and ticker.get("last"):
-            extra += float(amount) * float(ticker["last"])
+        try:
+            ticker = ex.fetch_ticker(f"{currency}/{quote}")
+            if ticker and ticker.get("last"):
+                extra += float(amount) * float(ticker["last"])
+        except Exception:
+            continue  # 取价失败（如 swap ex 取现货 ticker 触发 instruments 加载错）跳过，不阻断权益计算
     return total_quote + extra
 
 
