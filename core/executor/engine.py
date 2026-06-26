@@ -157,10 +157,10 @@ def run_once_cycle(demo_ex, live_ex) -> dict:
             return {"error": f"{label} exchange 未配置"}
         if not group_intents:
             # fail-safe：无 intent（部署中 / 全部停止 / executor 启动早于 daemon 第一轮）
-            # 时【不平仓】，避免误平账户现有仓位。停止单个部署的平仓由"非空 intent 下
+            # 时【不平仓】也不调 exchange——单 key（模拟盘）环境下 live_ex 鉴权会 50101 失败，
+            # waiting 分支绝不能触发任何 exchange 调用。停止单个部署的平仓由"非空 intent 下
             # intents ∪ 持仓对账"机制处理（该部署 symbol 从 target 消失但账户仍有仓 → 对账平掉）。
-            return {"status": "waiting_for_intents", "n_intents": 0,
-                    "equity": round(get_equity(ex), 2)}
+            return {"status": "waiting_for_intents", "n_intents": 0}
         return reconcile_and_trade(ex, group_intents)
 
     import time
