@@ -18,7 +18,6 @@ export default function Deploy() {
   const [instruments, setInstruments] = useState<string[]>(['BTC-USDT-SWAP', 'ETH-USDT-SWAP', 'SOL-USDT-SWAP'])
   const [leverage, setLeverage] = useState(5)
   const [positionRatio, setPositionRatio] = useState(0.1)
-  const [capitalWeight, setCapitalWeight] = useState(1.0)
   const [initialCapital, setInitialCapital] = useState(10000)
   const [sel, setSel] = useState<Record<string, { weight: number; invert: boolean }>>({})
   const [msg, setMsg] = useState('')
@@ -58,7 +57,6 @@ export default function Deploy() {
     setMonitorId(d.id)
     setName(d.name); setIsDemo(d.is_demo); setBar(d.bar); setSymbols(d.symbols)
     setLeverage(d.leverage); setPositionRatio(d.position_ratio)
-    setCapitalWeight(d.capital_weight ?? 1.0)
     const next: Record<string, { weight: number; invert: boolean }> = {}
     for (const g of d.groups) next[g.group_id] = { weight: g.weight, invert: g.invert }
     setSel(next)
@@ -69,7 +67,7 @@ export default function Deploy() {
     setEditingDeployId(null); setMonitorId('')
     setName(''); setSel({})
     setIsDemo(true); setBar('1H'); setSymbols(['BTC-USDT-SWAP'])
-    setLeverage(5); setPositionRatio(0.1); setCapitalWeight(1.0); setInitialCapital(10000)
+    setLeverage(5); setPositionRatio(0.1); setInitialCapital(10000)
     setBtResult(null); setMsg('')
   }
 
@@ -78,8 +76,7 @@ export default function Deploy() {
     if (!name || groupRefs.length === 0) { setMsg('需命名且选至少一组'); return }
     try {
       const payload = { name, is_demo: isDemo, bar, symbols,
-        groups: groupRefs, leverage, position_ratio: positionRatio,
-        capital_weight: capitalWeight }
+        groups: groupRefs, leverage, position_ratio: positionRatio }
       if (editingDeployId) {
         await api.updateDeployment(editingDeployId, payload)
         setMsg(`✓ 已更新部署「${name}」`)
@@ -235,11 +232,6 @@ export default function Deploy() {
         <div className="grid grid-cols-2 gap-2 mt-3">
           <Field label="杠杆"><Input type="number" value={leverage} onChange={(e) => setLeverage(+e.target.value)} className="w-full" /></Field>
           <Field label="仓位%"><Input type="number" step="0.01" value={positionRatio} onChange={(e) => setPositionRatio(+e.target.value)} className="w-full" /></Field>
-        </div>
-        <div className="mt-3">
-          <Field label="资金份额" hint="多部署时分账户份额，Σ≤1；单部署填 1.0">
-            <Input type="number" step="0.01" min={0} max={1} value={capitalWeight} onChange={(e) => setCapitalWeight(+e.target.value)} className="w-full" />
-          </Field>
         </div>
         <div className="h-px bg-line my-4" />
         <div className="text-xs text-dim mb-1">策略组占比（资金层分配）</div>
