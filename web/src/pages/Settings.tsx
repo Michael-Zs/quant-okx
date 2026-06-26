@@ -85,7 +85,7 @@ export default function Settings() {
           {cfg ? (
             <>
               <ParamRow label="默认杠杆" v={String(cfg.defaults.leverage)} />
-              <ParamRow label="仓位比例" v={cfg.defaults.position_ratio.toString()} />
+              <ParamRow label="仓位比例" v={`${Math.round(cfg.defaults.position_ratio * 100)}%`} />
               <ParamRow label="手续费率" v={cfg.defaults.fee.toString()} />
               <ParamRow label="滑点" v={cfg.defaults.slippage.toString()} />
             </>

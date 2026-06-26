@@ -231,7 +231,10 @@ export default function Deploy() {
         </Field>
         <div className="grid grid-cols-2 gap-2 mt-3">
           <Field label="杠杆"><Input type="number" value={leverage} onChange={(e) => setLeverage(+e.target.value)} className="w-full" /></Field>
-          <Field label="仓位%"><Input type="number" step="0.01" value={positionRatio} onChange={(e) => setPositionRatio(+e.target.value)} className="w-full" /></Field>
+          <Field label="仓位%" hint="0-100，单部署激进度（与资金份额、杠杆叠加为实际敞口）">
+            <Input type="number" min={0} max={100} step={1} value={Math.round(positionRatio * 100)}
+              onChange={(e) => setPositionRatio(Math.min(100, Math.max(0, +e.target.value)) / 100)} className="w-full" />
+          </Field>
         </div>
         <div className="h-px bg-line my-4" />
         <div className="text-xs text-dim mb-1">策略组占比（资金层分配）</div>

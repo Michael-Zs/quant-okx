@@ -141,6 +141,13 @@ curl -H "X-API-Token: $TOKEN" http://127.0.0.1:8787/api/balance?is_demo=true
 {"group_id":"grp_xxx","weight":1.0,"invert":false}
 ```
 
+### 部署字段（DeploymentCreate / DeploymentUpdate）
+| 字段 | 说明 |
+|---|---|
+| `leverage` | 杠杆倍数 |
+| `position_ratio` | 单部署仓位占比 |
+| `capital_weight` | **部署间资金份额**。多个在跑部署共享同一账户资金时，按各自 `capital_weight` 切分（Σ≤1 软约束，executor 检测到超额会按比例缩放并告警）。落地公式：实盘名义价值 = `equity × capital_weight × position_ratio × leverage`。新建默认 `1.0`；前端「资金份额分配」滑动条即批量 `PUT` 此字段调整 running 部署占比 |
+
 ### 回测响应（POST /api/backtest）
 ```jsonc
 {
@@ -243,10 +250,14 @@ DID=$(curl -sX POST http://127.0.0.1:8787/api/deployments \\
   -H "X-API-Token: $TOKEN" -H "Content-Type: application/json" \\
   -d "{\"name\":\"我的部署\",\"is_demo\":true,\"bar\":\"1H\",
        \"symbols\":[\"BTC-USDT-SWAP\"],\"groups\":[{\"group_id\":\"$GID\",\"weight\":1,\"invert\":false}],
-       \"leverage\":5,\"position_ratio\":0.1,\"initial_capital\":10000}" | jq -r .id)
+       \"leverage\":5,\"position_ratio\":0.1,\"capital_weight\":1.0}" | jq -r .id)
 curl -X POST http://127.0.0.1:8787/api/deployments/$DID/start -H "X-API-Token: $TOKEN"
 curl http://127.0.0.1:8787/api/deployments/$DID/state
-# → 返回 balance（可用余额）+ equity（总权益），盈亏看 equity 对比 initial_capital
+# → 返回 balance（可用余额）+ equity（总权益）；实盘盈亏以账户真实 equity 为准
+# 4) 调整资金份额（多部署共享账户时按 capital_weight 切分；前端「资金份额分配」滑动条即批量调此字段）
+curl -X PUT http://127.0.0.1:8787/api/deployments/$DID \
+  -H "X-API-Token: $TOKEN" -H "Content-Type: application/json" \
+  -d '{"capital_weight":0.5}'
 curl http://127.0.0.1:8787/api/deployments/$DID/logs?n=20
 curl -X POST http://127.0.0.1:8787/api/deployments/$DID/stop -H "X-API-Token: $TOKEN"
 ```
@@ -328,7 +339,7 @@ curl http://127.0.0.1:8787/api/deployments/$DID/state
 #   "status": "running"
 # }
 #
-# 盈亏 = equity - initial_capital（部署时设定的值）
+# 实盘盈亏以账户真实 equity 为准（initial_capital 字段已移除，不再作部署基准）
 ```
 
 ## 8. WebSocket：实时回测预览
@@ -379,16 +390,18 @@ print(f"可用: {r['balance']:.2f}, 总权益: {r['equity']:.2f}")
 d = requests.post(f"{BASE}/api/deployments", headers=H, json={
     "name":"api部署","is_demo":True,"bar":"1H","symbols":["BTC-USDT-SWAP"],
     "groups":[{"group_id":"<gid>","weight":1,"invert":False}],
-    "leverage":5,"position_ratio":0.1,"initial_capital":10000,
+    "leverage":5,"position_ratio":0.1,"capital_weight":1.0,
 }).json()
 requests.post(f"{BASE}/api/deployments/{d['id']}/start", headers=H)
 state = requests.get(f"{BASE}/api/deployments/{d['id']}/state").json()
-pnl = state["equity"] - d["initial_capital"]  # 用 equity 算盈亏
-print(f"盈亏: {pnl:.2f}")
+# 实盘盈亏以账户真实 equity 为准（initial_capital 已移除，对比你记录的启动基准）
+print(f"总权益 equity: {state['equity']:.2f}")
+# 调整资金份额（多部署共享账户时按 capital_weight 切分）
+requests.put(f"{BASE}/api/deployments/{d['id']}", headers=H, json={"capital_weight": 0.5})
 ```
 
 ## 11. 重要约束
-- **余额 vs 权益**：`balance` = 可用余额（free USDT），`equity` = 总权益（含保证金 + 其他币种折 USDT）。判断盈亏请用 `equity` 对比 `initial_capital`。
+- **余额 vs 权益**：`balance` = 可用余额（free USDT），`equity` = 总权益（含保证金 + 其他币种折 USDT）。回测盈亏对比 `equity` 与 `initial_capital`；实盘则看 `equity` 相对启动时的账户权益变化（`initial_capital` 字段已从部署移除）。
 - **回测引擎**为复利模型，默认**不建模爆仓**，高杠杆回测偏乐观。
 - **实盘有风险**：真实盘（`is_demo:false`）会真实下单，请从模拟盘 + 最小仓位开始。
 - **策略代码**拥有完整 Python 权限，仅运行可信代码。
