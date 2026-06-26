@@ -125,7 +125,9 @@ def create_deployment(req: DeploymentCreate):
                               symbols=req.symbols, groups=groups,
                               check_interval_sec=_BAR_INTERVAL.get(req.bar, 3600),
                               leverage=req.leverage,
-                              position_ratio=req.position_ratio, initial_capital=req.initial_capital)
+                              position_ratio=req.position_ratio,
+                              capital_weight=req.capital_weight,
+                              initial_capital=req.initial_capital)
     return R.get_deployment(did)
 
 
@@ -147,17 +149,24 @@ def start_deployment_route(did: str):
     if not R.get_deployment(did):
         raise HTTPException(404, f"未知部署: {did}")
     jid = Rt.start_deployment(did)
+    # 确保 executor 运行中（首个部署启动时拉起）
+    from core.executor.manager import ensure_executor
+    ensure_executor()
     return {"deployment_id": did, "job_id": jid, "status": "running"}
 
 
 @router.post("/deployments/{did}/stop")
 def stop_deployment_route(did: str):
-    return {"deployment_id": did, "stopped": Rt.stop_deployment(did)}
+    stopped = Rt.stop_deployment(did)
+    # 删除 intent 文件（executor 下一轮不再读到此部署的信号）
+    Rt.delete_intent(did)
+    return {"deployment_id": did, "stopped": stopped}
 
 
 @router.delete("/deployments/{did}")
 def delete_deployment_route(did: str):
     Rt.stop_deployment(did)
+    Rt.delete_intent(did)  # 删除 intent 文件
     Rt.delete_job(did)   # 清理 runtime/jobs state logs 文件，避免僵尸残留
     return {"deployment_id": did, "deleted": R.delete_deployment(did)}
 

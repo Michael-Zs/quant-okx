@@ -161,6 +161,12 @@ def deployment_logs(did: str, n: int = 50):
     return {"logs": Rt.read_logs(did, n)}
 
 
+@router.get("/executor/state")
+def executor_state():
+    """Executor 进程状态（聚合对账结果）。"""
+    return Rt.get_state("executor") or {}
+
+
 @router.get("/backtests")
 def backtests(ref_id: Optional[str] = None, node_kind: Optional[str] = None, limit: int = 50):
     init_db()

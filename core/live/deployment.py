@@ -1,19 +1,18 @@
-"""策略组部署执行：多组占比聚合 → 目标持仓 → 增量对齐下单。
+"""策略组部署执行：多组占比聚合 → 目标持仓 → 写 intent。
 
 daemon 每轮调 ``run_deployment_round``。聚合逻辑：
 - 部署 = 资金层组合（多组按 group_weight 切资金，各组独立持仓）。
-- 每个 symbol 的目标名义价值 =
-      Σ(group_weight × child_weight × 有效信号方向) × per_unit_notional。
+- 每个 symbol 的目标无量纲净信号 =
+      Σ(group_weight × child_weight × 有效信号方向)。
 - 有效信号方向经链路级 invert XOR：
       子节点自身 invert（已在 signals 内）× 组内 child invert × 组 invert × 部署 group invert。
-- 增量下单：目标 notional 与当前持仓 notional 的差额（避免每轮全平全开，省手续费），
-  单 symbol 下单失败不中断其他 symbol。
+- 返回 intent dict（含 signals/capital_weight/position_ratio/leverage/is_demo/bar/ts），
+  由 executor 聚合后对账下单。
 """
 from __future__ import annotations
+import time
 
 from core.data.fetcher import fetch_recent
-from core.data.symbols import okx_to_ccxt
-from core.live.exchange import get_positions, get_balance, get_equity, set_leverage, market_order
 from core.persist import repositories as R
 from core.strategy.node import node_from_spec, NodeContext, AllocationGroup
 from core.strategy.registry import StrategyRegistry
@@ -38,15 +37,17 @@ def collect_universe(deployment: dict) -> list[str]:
     return symbols
 
 
-def compute_targets(deployment: dict, ctx: NodeContext, per_unit_notional: float) -> dict[str, float]:
-    """计算每个 symbol 的目标名义价值（带符号）。返回 {okx_symbol: target_notional}。
+def compute_net_signals(deployment: dict, ctx: NodeContext) -> dict[str, float]:
+    """计算每个 symbol 的无量纲净信号（值域 [-1,1]）。返回 {okx_symbol: net_signal}。
 
     部署 = 资金层组合。AllocationGroup 的各子按 child_weight 切组资金；leaf/signal_combiner
     整组按 group_weight 切部署资金。invert 按链路 XOR 累乘。
+
+    **注意**: 本函数不再计算 per_unit_notional，由 executor 按 equity×cw×pr×lev 统一计算。
     """
     groups = deployment.get("groups", [])
     total_gw = sum(g.get("weight", 1.0) for g in groups) or 1.0
-    target: dict[str, float] = {}
+    signals: dict[str, float] = {}
 
     for gref in groups:
         gw = gref.get("weight", 1.0) / total_gw
@@ -57,82 +58,64 @@ def compute_targets(deployment: dict, ctx: NodeContext, per_unit_notional: float
         node = node_from_spec(grp["spec"])
         if isinstance(node, AllocationGroup):
             total_cw = sum(c.weight for c in node.children) or 1.0
-            for cref, signals in node.collect(ctx):
+            for cref, sigs in node.collect(ctx):
                 cw = cref.weight / total_cw
-                for sym, df in signals.items():
+                for sym, df in sigs.items():
                     sig = float(df["signal"].fillna(0).iloc[-1])
                     eff = _effective_signal(sig, cref.invert, node.invert, g_invert)
-                    target[sym] = target.get(sym, 0.0) + gw * cw * eff * per_unit_notional
+                    # 累加贡献（无量纲，值域 [-1,1]）
+                    signals[sym] = signals.get(sym, 0.0) + gw * cw * eff
         else:
             for sym, df in node.generate_signals(ctx).items():
                 sig = float(df["signal"].fillna(0).iloc[-1])
                 eff = _effective_signal(sig, g_invert)
-                target[sym] = target.get(sym, 0.0) + gw * eff * per_unit_notional
-    return target
+                signals[sym] = signals.get(sym, 0.0) + gw * eff
+    return signals
 
 
-def run_deployment_round(ex, deployment_id: str) -> dict:
-    """单轮部署执行：聚合目标持仓 → 对齐实际持仓 → 增量下单。
+def run_deployment_round(deployment_id: str) -> dict:
+    """单轮部署执行：聚合净信号 → 构造 intent dict。
 
-    返回 state dict（含每个 symbol 的目标/当前 notional、持仓、动作）。
+    不再进行对账下单（由 executor 统一处理）。
+    返回 intent dict（含 signals/capital_weight/position_ratio/leverage/is_demo/bar/ts），
+    供 daemon 写入 intent 文件。
+
+    Args:
+        deployment_id: 部署 ID
+
+    Returns:
+        intent dict: {deployment_id, signals, capital_weight, position_ratio, leverage,
+                     is_demo, bar, ts, prices}
     """
     deployment = R.get_deployment(deployment_id)
     if not deployment:
         raise ValueError(f"未知 deployment: {deployment_id}")
 
-    # 确保 daemon 进程的策略注册表已加载（LeafNode 据此实例化模板；
-    # daemon 是独立进程，不会继承 api_server 进程的注册表状态）
+    # 确保 daemon 进程的策略注册表已加载
     StrategyRegistry.discover_all()
 
     symbols = collect_universe(deployment)
     if not symbols:
-        return {"deployment_id": deployment_id, "error": "部署未涉及任何 symbol", "actions": []}
+        return {"deployment_id": deployment_id, "error": "部署未涉及任何 symbol"}
 
     data = {sym: fetch_recent(sym, deployment["bar"], limit=300) for sym in symbols}
     ctx = NodeContext(data=data, bar=deployment["bar"])
 
-    balance = get_balance(ex)
-    equity = get_equity(ex)
-    per_unit = balance * float(deployment["position_ratio"]) * float(deployment["leverage"])
-    targets = compute_targets(deployment, ctx, per_unit)   # {okx_symbol: target_notional}
+    net_signals = compute_net_signals(deployment, ctx)   # {okx_symbol: net_signal}
 
-    ccxt_map = {sym: okx_to_ccxt(sym) for sym in targets}
-    current = get_positions(ex, list(ccxt_map.values()))
-    actions: list[str] = []
-    positions_state: dict = {}
+    # 取最新价格（可选，供 executor 参考但不依赖）
+    prices = {sym: float(data[sym]["close"].iloc[-1]) for sym in net_signals}
 
-    for sym, target_n in targets.items():
-        ccxt_sym = ccxt_map[sym]
-        price = float(data[sym]["close"].iloc[-1])
-        cur = current.get(ccxt_sym, {})
-        cur_contracts = float(cur.get("contracts", 0.0))
-        cur_dir = int(cur.get("dir", 0))
-        current_n = cur_dir * cur_contracts * price
-        delta_n = target_n - current_n
-        positions_state[sym] = {
-            "target_notional": round(target_n, 2),
-            "current_notional": round(current_n, 2),
-            "price": price,
-            "position_dir": cur_dir, "position_contracts": cur_contracts,
-            "entry_price": cur.get("entry_price", 0.0),
-            "unrealized_pnl": cur.get("unrealized_pnl", 0.0),
-        }
-        # 阈值：名义差额 < 0.5% per_unit 视为无需调整（噪声过滤）
-        if abs(delta_n) < per_unit * 0.005:
-            actions.append(f"{sym} hold")
-            continue
-        set_leverage(ex, ccxt_sym, int(deployment["leverage"]))
-        amount = round(abs(delta_n) / price, 3)
-        if amount <= 0:
-            continue
-        side = "buy" if delta_n > 0 else "sell"
-        try:
-            market_order(ex, ccxt_sym, side, amount)
-            actions.append(f"{sym} {side} {amount} (Δ{delta_n:+.0f})")
-        except Exception as e:
-            actions.append(f"{sym} 下单失败: {e}")   # 单 symbol 失败不中断
+    return {
+        "deployment_id": deployment_id,
+        "signals": net_signals,
+        "capital_weight": deployment.get("capital_weight", 1.0),
+        "position_ratio": deployment["position_ratio"],
+        "leverage": deployment["leverage"],
+        "is_demo": deployment["is_demo"],
+        "bar": deployment["bar"],
+        "ts": time.time(),
+        "prices": prices,  # 可选，供 executor 参考
+    }
 
-    return {"deployment_id": deployment_id,
-            "balance": balance, "equity": equity,
-            "targets": {s: round(v, 2) for s, v in targets.items()},
-            "actions": actions, "positions": positions_state}
+

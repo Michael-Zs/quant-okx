@@ -59,6 +59,7 @@ class DeploymentCreate(BaseModel):
     groups: list[GroupRefSpec]
     leverage: int = 5
     position_ratio: float = 0.1
+    capital_weight: float = 1.0
     initial_capital: float = 10000.0
 
 
@@ -70,6 +71,7 @@ class DeploymentUpdate(BaseModel):
     groups: Optional[list[GroupRefSpec]] = None
     leverage: Optional[int] = None
     position_ratio: Optional[float] = None
+    capital_weight: Optional[float] = None
     initial_capital: Optional[float] = None
 
 

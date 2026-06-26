@@ -1,6 +1,6 @@
-"""部署聚合引擎测试：compute_targets 的权重缩放与链路级 invert XOR。
+"""部署聚合引擎测试：compute_net_signals 的权重缩放与链路级 invert XOR。
 
-不触达真实交易所（compute_targets 是纯聚合），用 tmp_db 造组 + 假行情 ctx。
+不触达真实交易所（compute_net_signals 是纯聚合），用 tmp_db 造组 + 假行情 ctx。
 """
 import sys
 from pathlib import Path
@@ -48,7 +48,8 @@ def _discover():
     StrategyRegistry.discover_all()
 
 
-def test_compute_targets_within_budget():
+def test_compute_net_signals_within_range():
+    """compute_net_signals 返回无量纲净信号，值域 [-1,1]。"""
     from core.live import deployment as D
     from core.persist import repositories as R
     _discover()
@@ -58,30 +59,30 @@ def test_compute_targets_within_budget():
     ]))
     dep = {"symbols": ["BTC-USDT-SWAP"],
            "groups": [{"group_id": gid, "weight": 1.0, "invert": False}]}
-    targets = D.compute_targets(dep, _ctx(), per_unit_notional=1000.0)
-    assert "BTC-USDT-SWAP" in targets
-    # 单组 weight=1、子权重和=1、信号∈[-1,1] → 目标应在 [-1000, 1000]
-    assert -1000.001 <= targets["BTC-USDT-SWAP"] <= 1000.001
+    signals = D.compute_net_signals(dep, _ctx())
+    assert "BTC-USDT-SWAP" in signals
+    # 单组 weight=1、子权重和=1、信号∈[-1,1] → 净信号应在 [-1, 1]
+    assert -1.001 <= signals["BTC-USDT-SWAP"] <= 1.001
 
 
-def test_group_invert_flips_target():
-    """部署层 g_invert=True 使目标取反（链路 XOR）。"""
+def test_group_invert_flips_signal():
+    """部署层 g_invert=True 使净信号取反（链路 XOR）。"""
     from core.live import deployment as D
     from core.persist import repositories as R
     _discover()
     gid = R.create_group(name="g2", spec=_alloc([
         {"node": _leaf("ma_cross", {"fast": 5, "slow": 20}), "weight": 1.0, "invert": False}]))
     ctx = _ctx()
-    pos = D.compute_targets({"symbols": ["BTC-USDT-SWAP"],
+    pos = D.compute_net_signals({"symbols": ["BTC-USDT-SWAP"],
                              "groups": [{"group_id": gid, "weight": 1.0, "invert": False}]},
-                            ctx, 1000.0)
-    neg = D.compute_targets({"symbols": ["BTC-USDT-SWAP"],
+                             ctx)
+    neg = D.compute_net_signals({"symbols": ["BTC-USDT-SWAP"],
                              "groups": [{"group_id": gid, "weight": 1.0, "invert": True}]},
-                            ctx, 1000.0)
+                             ctx)
     assert pos["BTC-USDT-SWAP"] == pytest.approx(-neg["BTC-USDT-SWAP"], abs=1e-6)
 
 
-def test_child_invert_flips_target():
+def test_child_invert_flips_signal():
     """组内 cref.invert=True 使该子贡献取反。"""
     from core.live import deployment as D
     from core.persist import repositories as R
@@ -91,12 +92,12 @@ def test_child_invert_flips_target():
     gid_neg = R.create_group(name="gn", spec=_alloc([
         {"node": _leaf("ma_cross", {"fast": 5, "slow": 20}), "weight": 1.0, "invert": True}]))
     ctx = _ctx()
-    pos = D.compute_targets({"symbols": ["BTC-USDT-SWAP"],
+    pos = D.compute_net_signals({"symbols": ["BTC-USDT-SWAP"],
                              "groups": [{"group_id": gid_pos, "weight": 1.0, "invert": False}]},
-                            ctx, 1000.0)
-    neg = D.compute_targets({"symbols": ["BTC-USDT-SWAP"],
+                             ctx)
+    neg = D.compute_net_signals({"symbols": ["BTC-USDT-SWAP"],
                              "groups": [{"group_id": gid_neg, "weight": 1.0, "invert": False}]},
-                            ctx, 1000.0)
+                             ctx)
     assert pos["BTC-USDT-SWAP"] == pytest.approx(-neg["BTC-USDT-SWAP"], abs=1e-6)
 
 
@@ -109,11 +110,11 @@ def test_group_weight_splits_capital():
     g1 = R.create_group(name="gw1", spec=spec)
     g2 = R.create_group(name="gw2", spec=spec)
     ctx = _ctx()
-    single = D.compute_targets({"symbols": ["BTC-USDT-SWAP"],
+    single = D.compute_net_signals({"symbols": ["BTC-USDT-SWAP"],
                                 "groups": [{"group_id": g1, "weight": 1.0, "invert": False}]},
-                               ctx, 1000.0)
-    double = D.compute_targets({"symbols": ["BTC-USDT-SWAP"],
+                                ctx)
+    double = D.compute_net_signals({"symbols": ["BTC-USDT-SWAP"],
                                 "groups": [{"group_id": g1, "weight": 0.5, "invert": False},
                                            {"group_id": g2, "weight": 0.5, "invert": False}]},
-                               ctx, 1000.0)
+                                ctx)
     assert single["BTC-USDT-SWAP"] == pytest.approx(double["BTC-USDT-SWAP"], abs=1e-6)

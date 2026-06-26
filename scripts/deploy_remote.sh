@@ -192,8 +192,22 @@ else
 fi
 
 # 检测孤儿 daemon（进程在跑但不在 runtime 跟踪里）—— 只警告，不自动杀
-ORPHAN_PIDS="$(ssh "$REMOTE" "pgrep -f 'trader_daemon.py' 2>/dev/null | tr '\n' ' '" || true)"
+ORPHAN_PIDS="$(ssh "$REMOTE" "pgrep -f 'trader_daemon.py|executor_daemon.py' 2>/dev/null | tr '\n' ' '" || true)"
 TRACKED_PIDS="$(echo "$TRADERS_JSON" | $PY -c "import sys,json; print(' '.join(str(d['pid']) for d in json.load(sys.stdin) if d.get('pid')))" 2>/dev/null || echo "")"
+# executor 的 pid 单独查
+EXECUTOR_PID="$(ssh "$REMOTE" "cd '$REMOTE_DIR' && $PY - <<'PYEOF'
+import sys, os, json
+sys.path.insert(0, os.getcwd())
+from core.live.runtime import read_json, state_path, is_process_alive
+st = read_json(state_path('executor')) or {}
+pid = st.get('pid')
+if pid and is_process_alive(pid):
+    print(pid)
+PYEOF
+" 2>/dev/null || echo "")"
+if [ -n "$EXECUTOR_PID" ]; then
+  TRACKED_PIDS="$TRACKED_PIDS $EXECUTOR_PID"
+fi
 ORPHANS=""
 for p in $ORPHAN_PIDS; do
   case " $TRACKED_PIDS " in *" $p "*) ;; *) ORPHANS="$ORPHANS $p" ;; esac
@@ -233,6 +247,13 @@ print('done')
 PYEOF
 "
     ok "实盘 daemon 已重启"
+
+    # 重启 executor（同 daemon，独立进程需单独重启）
+    echo "  重启 executor daemon..."
+    ssh "$REMOTE" "cd '${REMOTE_DIR}' && $PY -c 'import sys,os; sys.path.insert(0, os.getcwd()); from core.executor.manager import stop_executor, start_executor; print("  · stop executor", flush=True); stop_executor(); import time; time.sleep(1); print("  · start executor", flush=True); start_executor(); print("executor done")'"
+    ok "executor daemon 已重启"
+
+
   else
     warn "已跳过 daemon 重启 —— 注意：运行中的 daemon 仍用旧代码"
   fi

@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS deployments (
     check_interval_sec INTEGER,
     leverage           INTEGER,
     position_ratio     REAL,
+    capital_weight     REAL NOT NULL DEFAULT 1.0,
     initial_capital    REAL,
     groups_json        TEXT NOT NULL,
     created_at         TEXT,
@@ -100,6 +101,7 @@ def init_db():
         conn.execute("PRAGMA foreign_keys=ON")
         conn.executescript(SCHEMA)
         _ensure_column(conn, "deployments", "symbols_json", "TEXT NOT NULL DEFAULT '[]'")
+        _ensure_column(conn, "deployments", "capital_weight", "REAL NOT NULL DEFAULT 1.0")
         # strategies 表补列：bar/days/symbols/invert（随 Explore 保存需求加入）
         _ensure_column(conn, "strategies", "bar", "TEXT")
         _ensure_column(conn, "strategies", "days", "INTEGER")

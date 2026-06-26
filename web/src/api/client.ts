@@ -1,4 +1,4 @@
-import type { TemplateInfo, StrategyInstance, StrategyGroup, Deployment, NodeSpec, BacktestMetrics, UserStrategy, GridSearchResult, MultiReport, ConfigInfo } from './types'
+import type { TemplateInfo, StrategyInstance, StrategyGroup, Deployment, NodeSpec, BacktestMetrics, UserStrategy, GridSearchResult, MultiReport, ConfigInfo, ExecutorState } from './types'
 
 // API token：每次请求动态读 localStorage（用户在侧边栏设置入口填），回退默认
 function getToken(): string {
@@ -56,6 +56,7 @@ export const api = {
   deleteDeployment: (id: string) => req(`/deployments/${id}`, { method: 'DELETE' }),
   deploymentState: (id: string) => req<Record<string, unknown>>(`/deployments/${id}/state`),
   deploymentLogs: (id: string) => req<{ logs: Record<string, unknown>[] }>(`/deployments/${id}/logs`),
+  executorState: () => req<ExecutorState>('/executor/state'),
 
   // 回测
   backtest: (data: Record<string, unknown>) =>

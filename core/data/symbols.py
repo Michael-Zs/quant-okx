@@ -29,6 +29,21 @@ def ccxt_to_okx_bar(tf: str) -> str:
     return tf[:-1] + tf[-1].upper()
 
 
+def ccxt_to_okx_symbol(ccxt_symbol: str) -> str:
+    """ccxt symbol -> OKX symbol。
+    合约 BTC/USDT:USDT -> BTC-USDT-SWAP
+    现货 BTC/USDT     -> BTC-USDT
+    """
+    if ":" in ccxt_symbol:  # 合约 BTC/USDT:USDT
+        pair, settle = ccxt_symbol.split(":")
+        base, quote = pair.split("/")
+        return f"{base}-{quote}-SWAP"
+    if "/" in ccxt_symbol:  # 现货 BTC/USDT
+        base, quote = ccxt_symbol.split("/")
+        return f"{base}-{quote}"
+    return ccxt_symbol
+
+
 def okx_to_ccxt(symbol: str) -> str:
     """OKX symbol -> ccxt symbol。
     合约 BTC-USDT-SWAP -> BTC/USDT:USDT

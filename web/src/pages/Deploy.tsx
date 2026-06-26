@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Rocket, Play, Square, Trash2, Plus, TrendingUp, ChevronRight } from 'lucide-react'
+import { Rocket, Play, Square, Trash2, Plus, TrendingUp, ChevronRight, Activity } from 'lucide-react'
 import { api } from '../api/client'
-import type { StrategyGroup, Deployment, BacktestMetrics, SampledSeries, NodeSpec } from '../api/types'
+import type { StrategyGroup, Deployment, BacktestMetrics, SampledSeries, NodeSpec, ExecutorState } from '../api/types'
 import { Card, CardHeader, Button, Slider, Toggle, Select, Input, Field, Badge } from '../components/ui'
 import { EquityChart, MetricsGrid } from '../components/charts'
 import { MultiSymbolPicker } from '../components/SymbolPicker'
@@ -17,6 +17,7 @@ export default function Deploy() {
   const [instruments, setInstruments] = useState<string[]>(['BTC-USDT-SWAP', 'ETH-USDT-SWAP', 'SOL-USDT-SWAP'])
   const [leverage, setLeverage] = useState(5)
   const [positionRatio, setPositionRatio] = useState(0.1)
+  const [capitalWeight, setCapitalWeight] = useState(1.0)
   const [initialCapital, setInitialCapital] = useState(10000)
   const [sel, setSel] = useState<Record<string, { weight: number; invert: boolean }>>({})
   const [msg, setMsg] = useState('')
@@ -28,6 +29,7 @@ export default function Deploy() {
   const [btLoading, setBtLoading] = useState(false)
   const [btDays, setBtDays] = useState(180)
   const [btCollapsed, setBtCollapsed] = useState(false)
+  const [executorState, setExecutorState] = useState<ExecutorState | null>(null)
 
   useEffect(() => {
     refresh()
@@ -52,7 +54,9 @@ export default function Deploy() {
     setEditingDeployId(d.id)
     setMonitorId(d.id)
     setName(d.name); setIsDemo(d.is_demo); setBar(d.bar); setSymbols(d.symbols)
-    setLeverage(d.leverage); setPositionRatio(d.position_ratio); setInitialCapital(d.initial_capital)
+    setLeverage(d.leverage); setPositionRatio(d.position_ratio)
+    setCapitalWeight(d.capital_weight ?? 1.0)
+    setInitialCapital(d.initial_capital)
     const next: Record<string, { weight: number; invert: boolean }> = {}
     for (const g of d.groups) next[g.group_id] = { weight: g.weight, invert: g.invert }
     setSel(next)
@@ -63,7 +67,7 @@ export default function Deploy() {
     setEditingDeployId(null); setMonitorId('')
     setName(''); setSel({})
     setIsDemo(true); setBar('1H'); setSymbols(['BTC-USDT-SWAP'])
-    setLeverage(5); setPositionRatio(0.1); setInitialCapital(10000)
+    setLeverage(5); setPositionRatio(0.1); setCapitalWeight(1.0); setInitialCapital(10000)
     setBtResult(null); setMsg('')
   }
 
@@ -72,7 +76,8 @@ export default function Deploy() {
     if (!name || groupRefs.length === 0) { setMsg('需命名且选至少一组'); return }
     try {
       const payload = { name, is_demo: isDemo, bar, symbols,
-        groups: groupRefs, leverage, position_ratio: positionRatio, initial_capital: initialCapital }
+        groups: groupRefs, leverage, position_ratio: positionRatio,
+        capital_weight: capitalWeight, initial_capital: initialCapital }
       if (editingDeployId) {
         await api.updateDeployment(editingDeployId, payload)
         setMsg(`✓ 已更新部署「${name}」`)
@@ -126,6 +131,20 @@ export default function Deploy() {
     const t = setInterval(poll, 5000)
     return () => { stopped = true; clearInterval(t) }
   }, [monitorId])
+
+  // Executor 状态轮询（10s）
+  useEffect(() => {
+    let stopped = false
+    async function pollExecutor() {
+      try {
+        const es = await api.executorState()
+        if (!stopped) setExecutorState(es)
+      } catch { /* ignore */ }
+    }
+    pollExecutor()
+    const t = setInterval(pollExecutor, 10000)
+    return () => { stopped = true; clearInterval(t) }
+  }, [])
 
   const totalW = Object.values(sel).reduce((s, v) => s + v.weight, 0) || 1
   const positions = (state?.positions ?? {}) as Record<string, Record<string, number>>
@@ -197,6 +216,11 @@ export default function Deploy() {
           <Field label="仓位%"><Input type="number" step="0.01" value={positionRatio} onChange={(e) => setPositionRatio(+e.target.value)} className="w-full" /></Field>
           <Field label="资金"><Input type="number" value={initialCapital} onChange={(e) => setInitialCapital(+e.target.value)} className="w-full" /></Field>
         </div>
+        <div className="mt-3">
+          <Field label="资金份额" hint="多部署时分账户份额，Σ≤1；单部署填 1.0">
+            <Input type="number" step="0.01" min={0} max={1} value={capitalWeight} onChange={(e) => setCapitalWeight(+e.target.value)} className="w-full" />
+          </Field>
+        </div>
         <div className="h-px bg-line my-4" />
         <div className="text-xs text-dim mb-1">策略组占比（资金层分配）</div>
         <div className="text-[0.7rem] text-dim/70 mb-2">滑块调资金占比；开关=「反向」，反转该组信号方向（1↔-1），可用于翻转亏损策略或对冲配置</div>
@@ -251,6 +275,38 @@ export default function Deploy() {
                 <div className="px-4 pb-4"><MetricsGrid m={btResult.metrics} /></div>
               </>
             )}
+          </Card>
+        )}
+        {/* Executor 状态卡 */}
+        {executorState && (executorState.demo || executorState.live) && (
+          <Card className="mb-4">
+            <div className="flex items-center gap-2 px-4 pt-4">
+              <Activity size={16} className="text-accent" />
+              <div className="text-sm font-semibold">Executor 聚合对账</div>
+              <div className="text-[0.7rem] text-dim ml-auto">
+                部署数: demo={executorState.deployment_count?.demo ?? 0} live={executorState.deployment_count?.live ?? 0}
+              </div>
+            </div>
+            <div className="p-4 pt-2 space-y-3">
+              {executorState.demo && !('error' in executorState.demo) && (
+                <div>
+                  <div className="text-xs text-dim mb-1">模拟盘 · 权益 {fmt(executorState.demo.equity)}</div>
+                  {executorState.demo.warn && <div className="text-xs text-warn mb-1">⚠ {executorState.demo.warn}</div>}
+                  {executorState.demo.actions?.length > 0 && (
+                    <div className="text-xs text-dim truncate">{executorState.demo.actions.slice(0, 3).join(' · ')}{executorState.demo.actions.length > 3 ? '...' : ''}</div>
+                  )}
+                </div>
+              )}
+              {executorState.live && !('error' in executorState.live) && (
+                <div>
+                  <div className="text-xs text-dim mb-1">实盘 · 权益 {fmt(executorState.live.equity)}</div>
+                  {executorState.live.warn && <div className="text-xs text-warn mb-1">⚠ {executorState.live.warn}</div>}
+                  {executorState.live.actions?.length > 0 && (
+                    <div className="text-xs text-dim truncate">{executorState.live.actions.slice(0, 3).join(' · ')}{executorState.live.actions.length > 3 ? '...' : ''}</div>
+                  )}
+                </div>
+              )}
+            </div>
           </Card>
         )}
         {monitorId && monitored ? (

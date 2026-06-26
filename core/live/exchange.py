@@ -94,3 +94,29 @@ def set_leverage(ex, ccxt_symbol: str, leverage: int):
 def market_order(ex, ccxt_symbol: str, side: str, amount: float, reduce_only: bool = False):
     params = {"reduceOnly": True} if reduce_only else {}
     return ex.create_order(ccxt_symbol, "market", side, amount, params=params)
+
+
+def get_all_positions(ex) -> dict:
+    """返回账户全部持仓（无参调用 fetch_positions）。
+
+    返回 {okx_symbol: {dir, contracts, entry_price, unrealized_pnl}}。
+    用于 executor 对账：对账集合 = intents 声明 ∪ 账户实际持仓。
+    """
+    from core.data.symbols import ccxt_to_okx_symbol
+    out: dict = {}
+    try:
+        for p in ex.fetch_positions():
+            contracts = p.get("contracts") or 0
+            if contracts and contracts > 0:
+                ccxt_sym = p.get("symbol")
+                okx_sym = ccxt_to_okx_symbol(ccxt_sym)
+                side = p.get("side")
+                out[okx_sym] = {
+                    "dir": 1 if side == "long" else -1,
+                    "contracts": float(contracts),
+                    "entry_price": float(p.get("entryPrice") or 0),
+                    "unrealized_pnl": float(p.get("unrealizedPnl") or 0),
+                }
+    except Exception:
+        pass  # 取持仓失败时返回空，上游兜底
+    return out

@@ -239,3 +239,12 @@ def start_deployment(deployment_id: str) -> str:
 def stop_deployment(deployment_id: str) -> bool:
     """停止部署 daemon（按 deployment_id 作 key，复用 stop_job）。"""
     return stop_job(deployment_id)
+
+
+def delete_intent(deployment_id: str) -> None:
+    """删除部署的 intent 文件（停止/删除部署时调用）。"""
+    from core.utils.config import settings
+    try:
+        (settings.INTENTS_DIR / f"{deployment_id}.json").unlink()
+    except FileNotFoundError:
+        pass

@@ -84,11 +84,36 @@ export interface Deployment {
   check_interval_sec: number
   leverage: number
   position_ratio: number
+  capital_weight: number
   initial_capital: number
   groups: GroupRef[]
   alive?: boolean
   created_at: string
   updated_at: string
+}
+
+export interface ExecutorState {
+  demo?: {
+    equity: number
+    target: Record<string, number>
+    positions: Record<string, unknown>
+    actions: string[]
+    errors: Array<{sym: string; err: string}>
+    warn?: string | null
+  }
+  live?: {
+    equity: number
+    target: Record<string, number>
+    positions: Record<string, unknown>
+    actions: string[]
+    errors: Array<{sym: string; err: string}>
+    warn?: string | null
+  }
+  deployment_count?: {
+    demo: number
+    live: number
+  }
+  ts: string
 }
 
 export interface BenchmarkMetrics {

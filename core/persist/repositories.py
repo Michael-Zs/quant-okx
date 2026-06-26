@@ -190,7 +190,7 @@ def find_deployment_by_name(name: str) -> dict | None:
 
 
 def create_deployment(*, name, is_demo, bar, groups: list[dict], symbols: list[str] | None = None,
-                      check_interval_sec=3600, leverage=5, position_ratio=0.1,
+                      check_interval_sec=3600, leverage=5, position_ratio=0.1, capital_weight=1.0,
                       initial_capital=10000.0) -> str:
     symbols = symbols or []
     did = _new_id("dep")
@@ -198,17 +198,17 @@ def create_deployment(*, name, is_demo, bar, groups: list[dict], symbols: list[s
     with get_conn() as conn:
         conn.execute(
             "INSERT INTO deployments "
-            "(id,name,is_demo,bar,symbols_json,check_interval_sec,leverage,position_ratio,initial_capital,groups_json,created_at,updated_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            "(id,name,is_demo,bar,symbols_json,check_interval_sec,leverage,position_ratio,capital_weight,initial_capital,groups_json,created_at,updated_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (did, name, int(is_demo), bar, json.dumps(symbols), check_interval_sec, leverage,
-             position_ratio, initial_capital, json.dumps(groups), now, now))
+             position_ratio, capital_weight, initial_capital, json.dumps(groups), now, now))
         conn.commit()
     return did
 
 
 def update_deployment(did: str, **fields) -> bool:
     allowed = {"name", "is_demo", "bar", "check_interval_sec", "leverage",
-               "position_ratio", "initial_capital", "groups", "symbols"}
+               "position_ratio", "capital_weight", "initial_capital", "groups", "symbols"}
     col_map = {"groups": "groups_json", "symbols": "symbols_json"}
     sets, args = [], []
     for k, v in fields.items():
@@ -240,10 +240,15 @@ def delete_deployment(did: str) -> bool:
 
 def _decode_deployment(r) -> dict:
     symbols_raw = r["symbols_json"] if "symbols_json" in r.keys() else "[]"
+    # capital_weight 可能为 None（旧数据），默认 1.0
+    cw = r["capital_weight"] if "capital_weight" in r.keys() else 1.0
+    if cw is None:
+        cw = 1.0
     return {"id": r["id"], "name": r["name"], "is_demo": bool(r["is_demo"]),
             "bar": r["bar"], "symbols": json.loads(symbols_raw or "[]"),
             "check_interval_sec": r["check_interval_sec"],
             "leverage": r["leverage"], "position_ratio": r["position_ratio"],
+            "capital_weight": float(cw),
             "initial_capital": r["initial_capital"],
             "groups": json.loads(r["groups_json"]),
             "created_at": r["created_at"], "updated_at": r["updated_at"]}
