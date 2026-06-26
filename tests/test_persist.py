@@ -69,7 +69,7 @@ def test_deployment_crud():
     groups = [{"group_id": "grp_1", "weight": 0.7, "invert": False},
               {"group_id": "grp_2", "weight": 0.3, "invert": True}]
     did = R.create_deployment(name="live_1", is_demo=True, bar="1H", groups=groups,
-                              leverage=10, initial_capital=50000)
+                              leverage=10)
     d = R.get_deployment(did)
     assert d["is_demo"] is True
     assert d["groups"] == groups

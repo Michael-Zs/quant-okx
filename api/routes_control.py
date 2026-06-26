@@ -126,8 +126,7 @@ def create_deployment(req: DeploymentCreate):
                               check_interval_sec=_BAR_INTERVAL.get(req.bar, 3600),
                               leverage=req.leverage,
                               position_ratio=req.position_ratio,
-                              capital_weight=req.capital_weight,
-                              initial_capital=req.initial_capital)
+                              capital_weight=req.capital_weight)
     return R.get_deployment(did)
 
 

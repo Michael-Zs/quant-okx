@@ -51,7 +51,6 @@ CREATE TABLE IF NOT EXISTS deployments (
     leverage           INTEGER,
     position_ratio     REAL,
     capital_weight     REAL NOT NULL DEFAULT 1.0,
-    initial_capital    REAL,
     groups_json        TEXT NOT NULL,
     created_at         TEXT,
     updated_at         TEXT
@@ -92,6 +91,16 @@ def _ensure_column(conn, table: str, col: str, decl: str):
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
 
 
+def _drop_column(conn, table: str, col: str):
+    """删除已建库的列（SQLite 3.35+ 支持 DROP COLUMN）。旧版本/已删则忽略。"""
+    cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+    if col in cols:
+        try:
+            conn.execute(f"ALTER TABLE {table} DROP COLUMN {col}")
+        except Exception:
+            pass  # SQLite <3.35 不支持 DROP COLUMN：列留着但代码不再引用，无害
+
+
 def init_db():
     """建库 + 建表 + 开启 WAL + 轻量迁移。幂等，可多次调用。"""
     settings.ensure_dirs()
@@ -102,6 +111,7 @@ def init_db():
         conn.executescript(SCHEMA)
         _ensure_column(conn, "deployments", "symbols_json", "TEXT NOT NULL DEFAULT '[]'")
         _ensure_column(conn, "deployments", "capital_weight", "REAL NOT NULL DEFAULT 1.0")
+        _drop_column(conn, "deployments", "initial_capital")  # 已废弃：实盘用账户真实 equity，不再存起始资金
         # strategies 表补列：bar/days/symbols/invert（随 Explore 保存需求加入）
         _ensure_column(conn, "strategies", "bar", "TEXT")
         _ensure_column(conn, "strategies", "days", "INTEGER")

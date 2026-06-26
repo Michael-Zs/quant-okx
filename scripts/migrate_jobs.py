@@ -57,8 +57,7 @@ def migrate() -> int:
                      "invert": bool(job.get("invert", False))}],
             leverage=int(job.get("leverage", 5)),
             position_ratio=float(job.get("position_ratio", 0.1)),
-            check_interval_sec=int(job.get("check_interval_sec", 3600)),
-            initial_capital=10000.0)
+            check_interval_sec=int(job.get("check_interval_sec", 3600)))
         n += 1
         print(f"  {jf.name} -> deployment {did} ({name})")
     print(f"完成，共迁移 {n} 个 job")

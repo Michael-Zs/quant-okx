@@ -56,7 +56,6 @@ export default function Deploy() {
     setName(d.name); setIsDemo(d.is_demo); setBar(d.bar); setSymbols(d.symbols)
     setLeverage(d.leverage); setPositionRatio(d.position_ratio)
     setCapitalWeight(d.capital_weight ?? 1.0)
-    setInitialCapital(d.initial_capital)
     const next: Record<string, { weight: number; invert: boolean }> = {}
     for (const g of d.groups) next[g.group_id] = { weight: g.weight, invert: g.invert }
     setSel(next)
@@ -77,7 +76,7 @@ export default function Deploy() {
     try {
       const payload = { name, is_demo: isDemo, bar, symbols,
         groups: groupRefs, leverage, position_ratio: positionRatio,
-        capital_weight: capitalWeight, initial_capital: initialCapital }
+        capital_weight: capitalWeight }
       if (editingDeployId) {
         await api.updateDeployment(editingDeployId, payload)
         setMsg(`✓ 已更新部署「${name}」`)
@@ -211,10 +210,9 @@ export default function Deploy() {
         <Field label="品种（单币策略批量运行）" hint="单币策略会对所选每个币种独立运行">
           <MultiSymbolPicker value={symbols} onChange={setSymbols} instruments={instruments} />
         </Field>
-        <div className="grid grid-cols-3 gap-2 mt-3">
+        <div className="grid grid-cols-2 gap-2 mt-3">
           <Field label="杠杆"><Input type="number" value={leverage} onChange={(e) => setLeverage(+e.target.value)} className="w-full" /></Field>
           <Field label="仓位%"><Input type="number" step="0.01" value={positionRatio} onChange={(e) => setPositionRatio(+e.target.value)} className="w-full" /></Field>
-          <Field label="资金"><Input type="number" value={initialCapital} onChange={(e) => setInitialCapital(+e.target.value)} className="w-full" /></Field>
         </div>
         <div className="mt-3">
           <Field label="资金份额" hint="多部署时分账户份额，Σ≤1；单部署填 1.0">
@@ -245,9 +243,10 @@ export default function Deploy() {
           })}
           {Object.keys(sel).length === 0 && <div className="text-xs text-dim">从左侧选策略组</div>}
         </div>
-        <Field label="回测天数" hint="部署本身是实盘；此处仅用于历史回测预览">
-          <Input type="number" value={btDays} onChange={(e) => setBtDays(+e.target.value)} className="w-full" />
-        </Field>
+        <div className="grid grid-cols-2 gap-2 mt-3">
+          <Field label="回测天数" hint="回测预览用"><Input type="number" value={btDays} onChange={(e) => setBtDays(+e.target.value)} className="w-full" /></Field>
+          <Field label="回测资金" hint="起始资金（实盘用账户实际权益）"><Input type="number" value={initialCapital} onChange={(e) => setInitialCapital(+e.target.value)} className="w-full" /></Field>
+        </div>
         <div className="grid grid-cols-2 gap-2 mt-3">
           <Button variant="primary" className="py-2.5 md:py-2" onClick={save}><Plus size={15} className="inline mr-1.5" />{editingDeployId ? '更新部署' : '创建部署'}</Button>
           <Button variant="ghost" className="py-2.5 md:py-2" onClick={runBacktest} disabled={btLoading}><TrendingUp size={15} className="inline mr-1.5" />{btLoading ? '回测中…' : '回测预览'}</Button>

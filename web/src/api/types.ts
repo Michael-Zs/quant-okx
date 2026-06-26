@@ -85,7 +85,6 @@ export interface Deployment {
   leverage: number
   position_ratio: number
   capital_weight: number
-  initial_capital: number
   groups: GroupRef[]
   alive?: boolean
   created_at: string
